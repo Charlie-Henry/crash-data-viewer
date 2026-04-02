@@ -1,0 +1,1027 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Clark County — Crash Data Viewer</title>
+
+  <!-- Mapbox GL JS -->
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet" />
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
+
+  <!-- Papa Parse for CSV -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+
+  <style>
+    /* ─── TOKENS ─── */
+    :root {
+      --bg:        #0b0e14;
+      --surface:   #131720;
+      --surface2:  #1b2130;
+      --border:    #252d3d;
+      --text:      #e2e8f0;
+      --muted:     #64748b;
+      --accent:    #38bdf8;
+
+      /* severity palette */
+      --fatal:     #f43f5e;
+      --serious:   #fb923c;
+      --minor:     #facc15;
+      --property:  #4ade80;
+      --unknown:   #94a3b8;
+
+      --panel-w:   320px;
+      --radius:    6px;
+      --mono:      'JetBrains Mono', 'Fira Mono', monospace;
+      --sans:      'DM Sans', 'Segoe UI', sans-serif;
+    }
+
+    /* ─── RESET ─── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: var(--sans); font-size: 14px; }
+
+    /* ─── LAYOUT ─── */
+    #app { display: flex; height: 100vh; width: 100vw; position: relative; }
+    #map  { flex: 1; height: 100%; }
+
+    /* ─── SIDE PANEL ─── */
+    #panel {
+      width: var(--panel-w);
+      height: 100%;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      z-index: 10;
+      overflow: hidden;
+    }
+
+    /* header */
+    .panel-header {
+      padding: 20px 18px 14px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+      flex-shrink: 0;
+    }
+    .panel-header .eyebrow {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 4px;
+    }
+    .panel-header h1 {
+      font-size: 17px;
+      font-weight: 700;
+      line-height: 1.2;
+      color: var(--text);
+    }
+    .panel-header .sub {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 3px;
+      font-family: var(--mono);
+    }
+
+    /* stats bar */
+    .stats-bar {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .stat {
+      padding: 10px 12px;
+      text-align: center;
+      border-right: 1px solid var(--border);
+    }
+    .stat:last-child { border-right: none; }
+    .stat .val {
+      font-family: var(--mono);
+      font-size: 20px;
+      font-weight: 700;
+      line-height: 1;
+      display: block;
+    }
+    .stat .lbl {
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: var(--muted);
+      margin-top: 2px;
+      display: block;
+    }
+    .stat.fatal  .val { color: var(--fatal); }
+    .stat.serious .val { color: var(--serious); }
+    .stat.total  .val { color: var(--accent); }
+
+    /* controls scroll area */
+    .panel-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 14px 14px 80px;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border) transparent;
+    }
+
+    /* section */
+    .section { margin-bottom: 20px; }
+    .section-label {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 8px;
+      display: block;
+    }
+
+    /* severity toggles */
+    .sev-grid { display: flex; flex-direction: column; gap: 6px; }
+    .sev-btn {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface2);
+      cursor: pointer;
+      transition: border-color .15s, background .15s;
+      user-select: none;
+    }
+    .sev-btn:hover { border-color: var(--accent); }
+    .sev-btn.active { background: #1e2740; border-color: var(--accent); }
+    .sev-dot {
+      width: 12px; height: 12px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .sev-name { flex: 1; font-size: 13px; }
+    .sev-count {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .sev-check {
+      width: 16px; height: 16px;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      background: var(--surface);
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      transition: background .15s, border-color .15s;
+    }
+    .sev-btn.active .sev-check {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+    .sev-check svg { display: none; }
+    .sev-btn.active .sev-check svg { display: block; }
+
+    /* year range */
+    .year-range {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .year-inputs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .year-input-wrap { position: relative; }
+    .year-input-wrap label {
+      display: block;
+      font-size: 10px;
+      font-family: var(--mono);
+      color: var(--muted);
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+    }
+    .year-input-wrap select {
+      width: 100%;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 13px;
+      padding: 7px 10px;
+      cursor: pointer;
+      outline: none;
+      appearance: none;
+      -webkit-appearance: none;
+    }
+    .year-input-wrap select:focus { border-color: var(--accent); }
+
+    /* map style toggle */
+    .style-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .style-btn {
+      padding: 8px 6px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface2);
+      cursor: pointer;
+      text-align: center;
+      font-size: 11px;
+      color: var(--muted);
+      transition: all .15s;
+    }
+    .style-btn:hover { border-color: var(--accent); color: var(--text); }
+    .style-btn.active { border-color: var(--accent); color: var(--accent); background: #1e2740; }
+
+    /* legend */
+    .legend { display: flex; flex-direction: column; gap: 5px; }
+    .legend-row { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+    .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+    /* reset button */
+    .reset-btn {
+      width: 100%;
+      padding: 9px;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--muted);
+      cursor: pointer;
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      transition: all .15s;
+      margin-top: 4px;
+    }
+    .reset-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* ─── LOADING OVERLAY ─── */
+    #loading {
+      position: fixed;
+      inset: 0;
+      background: var(--bg);
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      transition: opacity .4s;
+    }
+    #loading.fade { opacity: 0; pointer-events: none; }
+    .spinner {
+      width: 32px; height: 32px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #loading p { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+
+    /* ─── POPUP ─── */
+    .mapboxgl-popup-content {
+      background: var(--surface) !important;
+      border: 1px solid var(--border) !important;
+      border-radius: var(--radius) !important;
+      padding: 0 !important;
+      box-shadow: 0 8px 32px rgba(0,0,0,.5) !important;
+      min-width: 220px;
+    }
+    .mapboxgl-popup-tip { display: none !important; }
+    .mapboxgl-popup-close-button {
+      color: var(--muted) !important;
+      font-size: 16px !important;
+      padding: 6px 10px !important;
+    }
+    .popup-inner { padding: 14px 16px; }
+    .popup-sev {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-family: var(--mono);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: .1em;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+    .popup-dot { width: 8px; height: 8px; border-radius: 50%; }
+    .popup-row { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 5px; font-size: 12px; }
+    .popup-row .pk { color: var(--muted); }
+    .popup-row .pv { color: var(--text); font-family: var(--mono); text-align: right; }
+
+    /* ─── HOVER TOOLTIP ─── */
+    #tooltip {
+      position: absolute;
+      pointer-events: none;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 6px 10px;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text);
+      white-space: nowrap;
+      opacity: 0;
+      transition: opacity .1s;
+      z-index: 100;
+    }
+
+    /* ─── CONFIG BANNER ─── */
+    #config-banner {
+      position: absolute;
+      top: 16px; left: 50%; transform: translateX(-50%);
+      background: #7c3aed;
+      color: #fff;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-family: var(--mono);
+      font-size: 11px;
+      z-index: 200;
+      display: none;
+      max-width: 500px;
+      text-align: center;
+      line-height: 1.5;
+      box-shadow: 0 4px 20px rgba(0,0,0,.4);
+    }
+
+    /* ─── SCROLLBAR ─── */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    /* ─── RESPONSIVE ─── */
+    @media (max-width: 640px) {
+      :root { --panel-w: 100vw; }
+      #app { flex-direction: column; }
+      #panel { width: 100%; height: auto; max-height: 45vh; border-right: none; border-bottom: 1px solid var(--border); }
+      #map { flex: 1; min-height: 0; }
+    }
+  </style>
+</head>
+
+<body>
+
+<!-- ─── LOADING ─── -->
+<div id="loading">
+  <div class="spinner"></div>
+  <p id="loading-msg">Initializing map…</p>
+</div>
+
+<!-- ─── CONFIG BANNER ─── -->
+<div id="config-banner" id="config-banner"></div>
+
+<!-- ─── HOVER TOOLTIP ─── -->
+<div id="tooltip"></div>
+
+<div id="app">
+
+  <!-- SIDE PANEL -->
+  <aside id="panel">
+    <div class="panel-header">
+      <div class="eyebrow">Clark County, NV</div>
+      <h1>Crash Data Viewer</h1>
+      <div class="sub" id="date-range-label">Loading…</div>
+    </div>
+
+    <div class="stats-bar">
+      <div class="stat fatal">
+        <span class="val" id="stat-fatal">—</span>
+        <span class="lbl">Fatal</span>
+      </div>
+      <div class="stat serious">
+        <span class="val" id="stat-serious">—</span>
+        <span class="lbl">Serious</span>
+      </div>
+      <div class="stat total">
+        <span class="val" id="stat-total">—</span>
+        <span class="lbl">Visible</span>
+      </div>
+    </div>
+
+    <div class="panel-body">
+
+      <!-- SEVERITY FILTER -->
+      <div class="section">
+        <span class="section-label">Severity</span>
+        <div class="sev-grid" id="sev-filters"></div>
+      </div>
+
+      <!-- DATE FILTER -->
+      <div class="section">
+        <span class="section-label">Date Range</span>
+        <div class="year-range">
+          <div class="year-inputs">
+            <div class="year-input-wrap">
+              <label>From</label>
+              <select id="year-from"></select>
+            </div>
+            <div class="year-input-wrap">
+              <label>To</label>
+              <select id="year-to"></select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MAP STYLE -->
+      <div class="section">
+        <span class="section-label">Map Style</span>
+        <div class="style-grid">
+          <button class="style-btn active" data-style="mapbox://styles/mapbox/dark-v11">Dark</button>
+          <button class="style-btn" data-style="mapbox://styles/mapbox/light-v11">Light</button>
+          <button class="style-btn" data-style="mapbox://styles/mapbox/satellite-streets-v12">Satellite</button>
+          <button class="style-btn" data-style="mapbox://styles/mapbox/streets-v12">Streets</button>
+        </div>
+      </div>
+
+      <!-- LEGEND -->
+      <div class="section">
+        <span class="section-label">Legend</span>
+        <div class="legend" id="legend"></div>
+      </div>
+
+      <button class="reset-btn" id="reset-btn">↺ Reset All Filters</button>
+
+    </div>
+  </aside>
+
+  <!-- MAP -->
+  <div id="map"></div>
+
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   CONFIGURATION — edit these values for your deployment
+═══════════════════════════════════════════════════════════════ */
+const CONFIG = {
+  // 1) Your Mapbox public token
+  mapboxToken: 'pk.eyJ1IjoiY2hhcmxpZTIzNDMiLCJhIjoiY21uaTRwMHNzMDluMzJycTRjam1oZnZwdiJ9.7q4he_UwnyrlOxwyFYGnLQ',
+
+  // 2) Public URL to your GCS CSV
+  csvUrl: 'https://storage.googleapis.com/aus-dashboard/clark_vz/clark_vz_data.csv',
+
+  // 3) Column name mappings
+  columns: {
+    lat:      'lat',
+    lng:      'lng',
+    severity: 'severity',
+    date:     'date',
+    extras: [
+      // Add extra columns to show in the click popup, e.g.:
+      // { label: 'Location', col: 'road_name' },
+    ]
+  },
+
+  // 4) Map severity values → display categories
+  severityMap: {
+    'fatal':          'fatal',
+    'serious injury': 'serious',
+  },
+
+  // 5) Initial map center (Las Vegas / Clark County)
+  initialCenter: [-115.1398, 36.1699],
+  initialZoom:   10,
+};
+
+/* ═══════════════════════════════════════════════════════════════
+   SEVERITY DISPLAY CONFIG
+═══════════════════════════════════════════════════════════════ */
+const SEVERITIES = [
+  { id: 'fatal',   label: 'Fatal',          color: '#f43f5e', radius: 7, zOffset: 20 },
+  { id: 'serious', label: 'Serious Injury', color: '#fb923c', radius: 5, zOffset: 10 },
+  { id: 'unknown', label: 'Unknown',        color: '#94a3b8', radius: 3, zOffset: 0  },
+];
+
+const SEV_COLOR_MAP = Object.fromEntries(SEVERITIES.map(s => [s.id, s.color]));
+
+/* ═══════════════════════════════════════════════════════════════
+   STATE
+═══════════════════════════════════════════════════════════════ */
+let allFeatures = [];
+let activeFilters = {
+  severities: new Set(SEVERITIES.map(s => s.id)),
+  yearFrom: null,
+  yearTo:   null,
+};
+let map, popup;
+
+/* ═══════════════════════════════════════════════════════════════
+   UTILS
+═══════════════════════════════════════════════════════════════ */
+function setLoading(msg) {
+  document.getElementById('loading-msg').textContent = msg;
+}
+function hideLoading() {
+  const el = document.getElementById('loading');
+  el.classList.add('fade');
+  setTimeout(() => el.remove(), 500);
+}
+
+function showBanner(msg) {
+  const el = document.getElementById('config-banner');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+function parseSeverity(raw) {
+  if (raw == null) return 'unknown';
+  const key = String(raw).trim().toLowerCase();
+  return CONFIG.severityMap[key] || CONFIG.severityMap[raw] || 'unknown';
+}
+
+function parseYear(raw) {
+  if (!raw) return null;
+  const d = new Date(raw);
+  if (!isNaN(d)) return d.getFullYear();
+  const m = String(raw).match(/\d{4}/);
+  return m ? parseInt(m[0]) : null;
+}
+
+function formatNum(n) {
+  return n.toLocaleString();
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   VALIDATE CONFIG
+═══════════════════════════════════════════════════════════════ */
+function validateConfig() {
+  const issues = [];
+  if (CONFIG.mapboxToken === 'YOUR_MAPBOX_TOKEN_HERE')
+    issues.push('Set CONFIG.mapboxToken to your Mapbox public token.');
+  if (CONFIG.csvUrl === 'YOUR_GCS_CSV_URL_HERE')
+    issues.push('Set CONFIG.csvUrl to your GCS bucket CSV URL.');
+  if (issues.length) {
+    showBanner('⚠ Configuration needed: ' + issues.join(' '));
+    return false;
+  }
+  return true;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   CSV LOAD + PARSE
+═══════════════════════════════════════════════════════════════ */
+function loadCsv(url) {
+  return new Promise((resolve, reject) => {
+    Papa.parse(url, {
+      download: true,
+      header: true,
+      skipEmptyLines: true,
+      complete: r => resolve(r.data),
+      error: e => reject(e),
+    });
+  });
+}
+
+function csvToFeatures(rows) {
+  const { lat, lng, severity, date, extras } = CONFIG.columns;
+  const features = [];
+
+  for (const row of rows) {
+    const la = parseFloat(row[lat]);
+    const lo = parseFloat(row[lng]);
+    if (isNaN(la) || isNaN(lo)) continue;
+
+    const sev  = parseSeverity(row[severity]);
+    const year = parseYear(row[date]);
+
+    const props = { sev, year, _raw: row };
+    features.push({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [lo, la] },
+      properties: props,
+    });
+  }
+  return features;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   FILTER + STATS
+═══════════════════════════════════════════════════════════════ */
+function filteredFeatures() {
+  return allFeatures.filter(f => {
+    const { sev, year } = f.properties;
+    if (!activeFilters.severities.has(sev)) return false;
+    if (activeFilters.yearFrom && year && year < activeFilters.yearFrom) return false;
+    if (activeFilters.yearTo   && year && year > activeFilters.yearTo)   return false;
+    return true;
+  });
+}
+
+function countBySev(features) {
+  const counts = {};
+  for (const f of features) {
+    const s = f.properties.sev;
+    counts[s] = (counts[s] || 0) + 1;
+  }
+  return counts;
+}
+
+function updateStats() {
+  const visible = filteredFeatures();
+  const counts  = countBySev(visible);
+  document.getElementById('stat-fatal').textContent   = formatNum(counts.fatal   || 0);
+  document.getElementById('stat-serious').textContent = formatNum(counts.serious || 0);
+  document.getElementById('stat-total').textContent   = formatNum(visible.length);
+
+  // update sev button counts
+  for (const sev of SEVERITIES) {
+    const el = document.querySelector(`[data-sev="${sev.id}"] .sev-count`);
+    if (el) el.textContent = formatNum(countBySev(allFeatures)[sev.id] || 0);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   MAP SOURCE UPDATE
+═══════════════════════════════════════════════════════════════ */
+function refreshMap() {
+  if (!map || !map.getSource('crashes')) return;
+  const visible = filteredFeatures();
+  map.getSource('crashes').setData({
+    type: 'FeatureCollection',
+    features: visible,
+  });
+  updateStats();
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   POPUP
+═══════════════════════════════════════════════════════════════ */
+function buildPopupHTML(props) {
+  const sev   = props.sev || 'unknown';
+  const color = SEV_COLOR_MAP[sev] || '#94a3b8';
+  const raw   = props._raw || {};
+
+  let rows = '';
+
+  // Format datetime nicely
+  const dateVal = raw[CONFIG.columns.date];
+  if (dateVal) {
+    const d = new Date(dateVal);
+    if (!isNaN(d)) {
+      const datePart = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      const timePart = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+      rows += popupRow('Date', datePart);
+      rows += popupRow('Time', timePart);
+    } else {
+      rows += popupRow('Date', dateVal);
+    }
+  }
+
+  // show extras
+  for (const ex of CONFIG.columns.extras) {
+    const v = raw[ex.col];
+    if (v != null && v !== '') rows += popupRow(ex.label, v);
+  }
+
+  const sevLabel = SEVERITIES.find(s => s.id === sev)?.label || sev;
+
+  return `
+    <div class="popup-inner">
+      <div class="popup-sev" style="color:${color}">
+        <span class="popup-dot" style="background:${color}"></span>
+        ${sevLabel}
+      </div>
+      ${rows}
+    </div>`;
+}
+
+function popupRow(k, v) {
+  return `<div class="popup-row"><span class="pk">${k}</span><span class="pv">${v}</span></div>`;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   BUILD SEVERITY FILTER UI
+═══════════════════════════════════════════════════════════════ */
+function buildSevFilters() {
+  const container = document.getElementById('sev-filters');
+  const allCounts = countBySev(allFeatures);
+
+  for (const sev of SEVERITIES) {
+    const count = allCounts[sev.id] || 0;
+    const btn = document.createElement('button');
+    btn.className = 'sev-btn active';
+    btn.dataset.sev = sev.id;
+    btn.innerHTML = `
+      <span class="sev-dot" style="background:${sev.color}"></span>
+      <span class="sev-name">${sev.label}</span>
+      <span class="sev-count">${formatNum(count)}</span>
+      <span class="sev-check">
+        <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+          <path d="M1 4l3 3 5-6" stroke="var(--bg)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </span>`;
+    btn.addEventListener('click', () => {
+      const s = btn.dataset.sev;
+      if (activeFilters.severities.has(s)) {
+        activeFilters.severities.delete(s);
+        btn.classList.remove('active');
+      } else {
+        activeFilters.severities.add(s);
+        btn.classList.add('active');
+      }
+      refreshMap();
+    });
+    container.appendChild(btn);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   BUILD YEAR SELECTORS
+═══════════════════════════════════════════════════════════════ */
+function buildYearSelectors() {
+  const years = [...new Set(
+    allFeatures.map(f => f.properties.year).filter(Boolean)
+  )].sort();
+
+  if (years.length === 0) return;
+
+  const minY = years[0], maxY = years[years.length - 1];
+  activeFilters.yearFrom = minY;
+  activeFilters.yearTo   = maxY;
+
+  const fromSel = document.getElementById('year-from');
+  const toSel   = document.getElementById('year-to');
+
+  for (const y of years) {
+    fromSel.add(new Option(y, y));
+    toSel.add(new Option(y, y));
+  }
+  fromSel.value = minY;
+  toSel.value   = maxY;
+
+  document.getElementById('date-range-label').textContent = `${minY} – ${maxY}`;
+
+  fromSel.addEventListener('change', () => {
+    activeFilters.yearFrom = parseInt(fromSel.value);
+    if (activeFilters.yearFrom > activeFilters.yearTo) {
+      activeFilters.yearTo = activeFilters.yearFrom;
+      toSel.value = fromSel.value;
+    }
+    refreshMap();
+  });
+  toSel.addEventListener('change', () => {
+    activeFilters.yearTo = parseInt(toSel.value);
+    if (activeFilters.yearTo < activeFilters.yearFrom) {
+      activeFilters.yearFrom = activeFilters.yearTo;
+      fromSel.value = toSel.value;
+    }
+    refreshMap();
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   BUILD LEGEND
+═══════════════════════════════════════════════════════════════ */
+function buildLegend() {
+  const container = document.getElementById('legend');
+  for (const sev of SEVERITIES) {
+    const row = document.createElement('div');
+    row.className = 'legend-row';
+    row.innerHTML = `<span class="legend-dot" style="background:${sev.color}"></span>${sev.label}`;
+    container.appendChild(row);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   MAP STYLE SWITCHER
+═══════════════════════════════════════════════════════════════ */
+function buildStyleSwitcher() {
+  document.querySelectorAll('.style-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.style-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      map.setStyle(btn.dataset.style);
+      // re-add layers after style loads
+      map.once('styledata', addMapLayers);
+    });
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   RESET
+═══════════════════════════════════════════════════════════════ */
+function resetFilters() {
+  activeFilters.severities = new Set(SEVERITIES.map(s => s.id));
+  document.querySelectorAll('.sev-btn').forEach(b => b.classList.add('active'));
+
+  const years = [...document.getElementById('year-from').options].map(o => parseInt(o.value));
+  if (years.length) {
+    const minY = Math.min(...years), maxY = Math.max(...years);
+    activeFilters.yearFrom = minY;
+    activeFilters.yearTo   = maxY;
+    document.getElementById('year-from').value = minY;
+    document.getElementById('year-to').value   = maxY;
+  }
+  refreshMap();
+  map.flyTo({ center: CONFIG.initialCenter, zoom: CONFIG.initialZoom });
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ADD MAP LAYERS
+═══════════════════════════════════════════════════════════════ */
+function addMapLayers() {
+  // remove existing if style reload
+  if (map.getSource('crashes')) {
+    ['crashes-circles', 'crashes-halos'].forEach(id => {
+      if (map.getLayer(id)) map.removeLayer(id);
+    });
+    map.removeSource('crashes');
+  }
+
+  const visible = filteredFeatures();
+
+  map.addSource('crashes', {
+    type: 'geojson',
+    data: { type: 'FeatureCollection', features: visible },
+    generateId: true,
+  });
+
+  // Halo layer (glow effect for fatal/serious)
+  map.addLayer({
+    id: 'crashes-halos',
+    type: 'circle',
+    source: 'crashes',
+    filter: ['in', ['get', 'sev'], ['literal', ['fatal', 'serious']]],
+    paint: {
+      'circle-radius': [
+        'match', ['get', 'sev'],
+        'fatal',   14,
+        'serious', 10,
+        8
+      ],
+      'circle-color': [
+        'match', ['get', 'sev'],
+        'fatal',   '#f43f5e',
+        'serious', '#fb923c',
+        '#ffffff'
+      ],
+      'circle-opacity': 0.15,
+      'circle-blur': 1,
+    }
+  });
+
+  // Main dots
+  map.addLayer({
+    id: 'crashes-circles',
+    type: 'circle',
+    source: 'crashes',
+    paint: {
+      'circle-radius': [
+        'interpolate', ['linear'], ['zoom'],
+        8,  ['match', ['get', 'sev'], 'fatal', 5, 'serious', 4, 'minor', 3, 2],
+        14, ['match', ['get', 'sev'], 'fatal', 9, 'serious', 7, 'minor', 5, 4],
+      ],
+      'circle-color': [
+        'match', ['get', 'sev'],
+        'fatal',    '#f43f5e',
+        'serious',  '#fb923c',
+        'minor',    '#facc15',
+        'property', '#4ade80',
+        '#94a3b8'
+      ],
+      'circle-opacity': [
+        'interpolate', ['linear'], ['zoom'],
+        8, 0.75,
+        14, 0.9
+      ],
+      'circle-stroke-color': 'rgba(0,0,0,0.5)',
+      'circle-stroke-width': 0.5,
+      'circle-sort-key': [
+        'match', ['get', 'sev'],
+        'fatal', 4, 'serious', 3, 'minor', 2, 1
+      ],
+    }
+  });
+
+  // ─ hover cursor
+  map.on('mouseenter', 'crashes-circles', e => {
+    map.getCanvas().style.cursor = 'pointer';
+    const f = e.features[0];
+    const tip = document.getElementById('tooltip');
+    const sevLabel = SEVERITIES.find(s => s.id === f.properties.sev)?.label || f.properties.sev;
+    tip.textContent = sevLabel;
+    tip.style.opacity = '1';
+  });
+
+  map.on('mousemove', 'crashes-circles', e => {
+    const tip = document.getElementById('tooltip');
+    tip.style.left = (e.point.x + 12) + 'px';
+    tip.style.top  = (e.point.y - 10) + 'px';
+  });
+
+  map.on('mouseleave', 'crashes-circles', () => {
+    map.getCanvas().style.cursor = '';
+    document.getElementById('tooltip').style.opacity = '0';
+  });
+
+  // ─ click popup
+  map.on('click', 'crashes-circles', e => {
+    const f = e.features[0];
+    // decode _raw (stored as JSON string by mapbox)
+    let props = { ...f.properties };
+    try { props._raw = JSON.parse(props._raw); } catch(e) { props._raw = {}; }
+
+    popup
+      .setLngLat(e.lngLat)
+      .setHTML(buildPopupHTML(props))
+      .addTo(map);
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   DEMO DATA (used when config not yet set)
+═══════════════════════════════════════════════════════════════ */
+function generateDemoFeatures() {
+  // Scatter demo points around Las Vegas valley
+  const center = [-115.14, 36.17];
+  const sevs = ['fatal','fatal','serious','serious','serious','minor','minor','minor','property','unknown'];
+  const features = [];
+  for (let i = 0; i < 400; i++) {
+    const sev = sevs[Math.floor(Math.random() * sevs.length)];
+    const year = 2019 + Math.floor(Math.random() * 5);
+    features.push({
+      type: 'Feature',
+      geometry: {
+        type: 'Point',
+        coordinates: [
+          center[0] + (Math.random() - 0.5) * 0.6,
+          center[1] + (Math.random() - 0.5) * 0.4
+        ]
+      },
+      properties: {
+        sev, year,
+        _raw: JSON.stringify({ COLLISION_DATE: `${year}-0${1+Math.floor(Math.random()*9)}-${10+Math.floor(Math.random()*18)}`, Note: 'Demo data' })
+      }
+    });
+  }
+  return features;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   INIT
+═══════════════════════════════════════════════════════════════ */
+async function init() {
+  const configured = validateConfig();
+
+  // ─ init Mapbox
+  mapboxgl.accessToken = configured ? CONFIG.mapboxToken : 'pk.eyJ1IjoiZXhhbXBsZSIsImEiOiJleGFtcGxlIn0.example';
+
+  map = new mapboxgl.Map({
+    container: 'map',
+    style: 'mapbox://styles/mapbox/dark-v11',
+    center: CONFIG.initialCenter,
+    zoom:   CONFIG.initialZoom,
+    attributionControl: false,
+  });
+
+  map.addControl(new mapboxgl.NavigationControl(), 'bottom-right');
+  map.addControl(new mapboxgl.ScaleControl({ unit: 'imperial' }), 'bottom-left');
+  map.addControl(new mapboxgl.AttributionControl({ compact: true }), 'bottom-right');
+
+  popup = new mapboxgl.Popup({ closeButton: true, closeOnClick: false, maxWidth: '300px' });
+
+  buildLegend();
+  buildStyleSwitcher();
+  document.getElementById('reset-btn').addEventListener('click', resetFilters);
+
+  setLoading('Loading crash data…');
+
+  // ─ load data
+  if (configured) {
+    try {
+      const rows = await loadCsv(CONFIG.csvUrl);
+      allFeatures = csvToFeatures(rows).map(f => ({
+        ...f,
+        properties: { ...f.properties, _raw: JSON.stringify(f.properties._raw) }
+      }));
+    } catch(err) {
+      showBanner(`Failed to load CSV: ${err.message}. Check CORS settings on your GCS bucket.`);
+      allFeatures = generateDemoFeatures();
+    }
+  } else {
+    // demo mode
+    allFeatures = generateDemoFeatures();
+    document.getElementById('date-range-label').textContent = 'Demo mode — configure CONFIG above';
+  }
+
+  buildSevFilters();
+  buildYearSelectors();
+  updateStats();
+
+  // ─ add layers once map is ready
+  map.on('load', () => {
+    addMapLayers();
+    hideLoading();
+  });
+  // if map already loaded (race condition)
+  if (map.loaded()) { addMapLayers(); hideLoading(); }
+}
+
+init();
+</script>
+</body>
+</html>
