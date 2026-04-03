@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Clark County — Crash Data Viewer</title>
 
+  <!-- FontAwesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+
   <!-- Mapbox GL JS -->
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet" />
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
@@ -24,8 +27,8 @@
       --accent:    #2563eb;
 
       /* severity palette */
-      --fatal:     #dc2626;
-      --serious:   #ea580c;
+      --fatal:     #FE343B;
+      --serious:   #FEBC40;
 
       --panel-w:   320px;
       --radius:    6px;
@@ -259,7 +262,9 @@
     }
     .mode-btn:hover { border-color: var(--accent); }
     .mode-btn.active { background: #eff6ff; border-color: var(--accent); }
-    .mode-icon { font-size: 15px; line-height: 1; flex-shrink: 0; width: 20px; text-align: center; }
+    .mode-icon { line-height: 1; flex-shrink: 0; width: 20px; text-align: center; display: flex; align-items: center; justify-content: center; }
+    .mode-icon i { font-size: 14px; color: var(--muted); transition: color .15s; }
+    .mode-btn.active .mode-icon i { color: var(--accent); }
     .mode-name { flex: 1; font-size: 13px; }
     .mode-count { font-family: var(--mono); font-size: 11px; color: var(--muted); }
     .mode-check {
@@ -330,23 +335,13 @@
     .popup-row { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 5px; font-size: 12px; }
     .popup-row .pk { color: var(--muted); }
     .popup-row .pv { color: var(--text); font-family: var(--mono); text-align: right; }
+    .popup-divider { height: 1px; background: var(--border); margin: 8px 0; }
+    .popup-flag-val { font-size: 13px; font-family: var(--sans) !important; }
+    .flag-yes { color: #94a3b8 !important; }
+    .flag-no  { color: #cbd5e1 !important; }
 
     /* ─── HOVER TOOLTIP ─── */
-    #tooltip {
-      position: absolute;
-      pointer-events: none;
-      background: #1a2233;
-      border: none;
-      border-radius: 4px;
-      padding: 5px 10px;
-      font-family: var(--mono);
-      font-size: 11px;
-      color: #ffffff;
-      white-space: nowrap;
-      opacity: 0;
-      transition: opacity .1s;
-      z-index: 100;
-    }
+
 
     /* ─── CONFIG BANNER ─── */
     #config-banner {
@@ -393,8 +388,6 @@
 <div id="config-banner" id="config-banner"></div>
 
 <!-- ─── HOVER TOOLTIP ─── -->
-<div id="tooltip"></div>
-
 <div id="app">
 
   <!-- SIDE PANEL -->
@@ -408,7 +401,7 @@
     <div class="stats-bar">
       <div class="stat fatal">
         <span class="val" id="stat-fatal">—</span>
-        <span class="lbl">Fatal</span>
+        <span class="lbl">Fatalities</span>
       </div>
       <div class="stat serious">
         <span class="val" id="stat-serious">—</span>
@@ -426,7 +419,7 @@
 
       <!-- MODE FILTER -->
       <div class="section">
-        <span class="section-label">Mode Involved</span>
+        <span class="section-label">Involvement</span>
         <div class="mode-grid" id="mode-filters"></div>
       </div>
 
@@ -463,27 +456,34 @@
 
 </div>
 
+<script src="config.js"></script>
+
 <script>
 /* ═══════════════════════════════════════════════════════════════
    CONFIGURATION — edit these values for your deployment
 ═══════════════════════════════════════════════════════════════ */
 const CONFIG = {
   // 1) Your Mapbox public token
-  mapboxToken: 'pk.eyJ1IjoiY2hhcmxpZTIzNDMiLCJhIjoiY21uaTRwMHNzMDluMzJycTRjam1oZnZwdiJ9.7q4he_UwnyrlOxwyFYGnLQ',
+  mapboxToken: (window.ENV && window.ENV.MAPBOX_TOKEN) || 'YOUR_MAPBOX_TOKEN_HERE',
 
   // 2) Public URL to your GCS CSV
   csvUrl: 'https://storage.googleapis.com/aus-dashboard/clark_vz/clark_vz_data.csv',
 
   // 3) Column name mappings
   columns: {
-    lat:      'lat',
-    lng:      'lng',
-    severity: 'severity',
-    date:     'date',
-    extras: [
-      // Add extra columns to show in the click popup, e.g.:
-      // { label: 'Location', col: 'road_name' },
-    ]
+    lat:          'lat',
+    lng:          'lng',
+    severity:     'severity',
+    date:         'date',
+    numFatalities:'NumFatalities',
+    numInjured:   'NumInjured',
+    crashType:    'VehCrashType',
+    crashNum:     'CrashNum',
+    hitAndRun:    'HitandRun',
+    alcohol:      'AlcoholInvolved',
+    pedestrian:   'PedestrianInvolved',
+    motorcycle:   'MotorcycleInvolved',
+    extras: []
   },
 
   // 4) Map severity values → display categories
@@ -503,21 +503,19 @@ const CONFIG = {
    SEVERITY DISPLAY CONFIG
 ═══════════════════════════════════════════════════════════════ */
 const SEVERITIES = [
-  { id: 'fatal',   label: 'Fatal',          color: '#dc2626', radius: 6 },
-  { id: 'serious', label: 'Serious Injury', color: '#ea580c', radius: 6 },
+  { id: 'fatal',   label: 'Fatal',          color: '#FE343B', radius: 6 },
+  { id: 'serious', label: 'Serious Injury', color: '#FEBC40', radius: 6 },
 ];
 
 const SEV_COLOR_MAP = Object.fromEntries(SEVERITIES.map(s => [s.id, s.color]));
 
 /* ═══════════════════════════════════════════════════════════════
-   MODE CONFIG
+   INVOLVEMENT FLAGS CONFIG
 ═══════════════════════════════════════════════════════════════ */
-const MODES = [
-  { id: 'ped',        label: 'Pedestrian',  icon: '🚶', cols: ['ped_fatalities',        'ped_injuries']        },
-  { id: 'bicyclist',  label: 'Bicyclist',   icon: '🚲', cols: ['bicyclist_fatalities',  'bicyclist_injuries']  },
-  { id: 'scooter',    label: 'Scooter',     icon: '🛴', cols: ['scooter_fatalities',    'scooter_injuries']    },
-  { id: 'motorist',   label: 'Motorist',    icon: '🚗', cols: ['motorist_fatalities',   'motorist_injuries']   },
-  { id: 'other',      label: 'Other',       icon: '•',  cols: ['other_fatalities',      'other_injuries']      },
+const FLAGS = [
+  { id: 'alcohol',    label: 'Alcohol Involved',    faClass: 'fa-solid fa-wine-glass', col: 'alcohol'    },
+  { id: 'pedestrian', label: 'Pedestrian Involved', faClass: 'fa-solid fa-walking',         col: 'pedestrian' },
+  { id: 'hitandrun',  label: 'Hit & Run',           faClass: 'fa-solid fa-car-burst',       col: 'hitandrun'  },
 ];
 
 /* ═══════════════════════════════════════════════════════════════
@@ -526,7 +524,7 @@ const MODES = [
 let allFeatures = [];
 let activeFilters = {
   severities: new Set(SEVERITIES.map(s => s.id)),
-  modes:      null,
+  flags:      null, // null = no flag filter (show all); Set of flag ids = must match at least one
   dateFrom:   null,
   dateTo:     null,
 };
@@ -618,13 +616,21 @@ function csvToFeatures(rows) {
       if (!isNaN(d)) isoDate = d.toISOString().slice(0, 10);
     }
 
-    // Extract mode counts (parse as integers, default 0)
-    const modeCounts = {};
-    for (const mode of MODES) {
-      modeCounts[mode.id] = mode.cols.reduce((sum, col) => sum + (parseInt(row[col]) || 0), 0);
-    }
+    // Extract boolean involvement flags
+    const cols = CONFIG.columns;
+    const parseFlag = v => v === true || String(v).trim().toLowerCase() === 'true';
+    const flags = {
+      alcohol:    parseFlag(row[cols.alcohol]),
+      pedestrian: parseFlag(row[cols.pedestrian]),
+      hitandrun:  parseFlag(row[cols.hitAndRun]),
+    };
 
-    const props = { sev, year, isoDate, modeCounts: JSON.stringify(modeCounts), _raw: row };
+    // Extract numeric crash fields
+    const numFatalities = parseInt(row[cols.numFatalities]) || 0;
+    const numInjured    = parseInt(row[cols.numInjured])    || 0;
+
+    const props = { sev, year, isoDate, numFatalities, numInjured,
+                    flags: JSON.stringify(flags), _raw: row };
     features.push({
       type: 'Feature',
       geometry: { type: 'Point', coordinates: [lo, la] },
@@ -643,12 +649,12 @@ function filteredFeatures() {
     if (!activeFilters.severities.has(sev)) return false;
     if (activeFilters.dateFrom && isoDate && isoDate < activeFilters.dateFrom) return false;
     if (activeFilters.dateTo   && isoDate && isoDate > activeFilters.dateTo)   return false;
-    // Mode filter: crash must have count > 0 for at least one active mode
-    if (activeFilters.modes !== null) {
-      let modeCounts;
-      try { modeCounts = JSON.parse(f.properties.modeCounts || '{}'); } catch(e) { modeCounts = {}; }
-      const involvedInAny = [...activeFilters.modes].some(m => (modeCounts[m] || 0) > 0);
-      if (!involvedInAny) return false;
+    // Flag filter: crash must have true for at least one selected flag
+    if (activeFilters.flags !== null) {
+      let flags;
+      try { flags = JSON.parse(f.properties.flags || '{}'); } catch(e) { flags = {}; }
+      const matchesAny = [...activeFilters.flags].some(id => flags[id] === true);
+      if (!matchesAny) return false;
     }
     return true;
   });
@@ -665,28 +671,31 @@ function countBySev(features) {
 
 function updateStats() {
   const visible = filteredFeatures();
-  const counts  = countBySev(visible);
-  document.getElementById('stat-fatal').textContent   = formatNum(counts.fatal   || 0);
+  // Fatal stat = sum of NumFatalities across visible crashes
+  const totalFatalities = visible.reduce((sum, f) => sum + (f.properties.numFatalities || 0), 0);
+  document.getElementById('stat-fatal').textContent   = formatNum(totalFatalities);
+  // Serious stat = count of crashes with severity=serious
+  const counts = countBySev(visible);
   document.getElementById('stat-serious').textContent = formatNum(counts.serious || 0);
 
-  // update sev button counts (always show total-data counts, not filtered)
+  // update sev button counts (total across all data)
   for (const sev of SEVERITIES) {
     const el = document.querySelector(`[data-sev="${sev.id}"] .sev-count`);
     if (el) el.textContent = formatNum(countBySev(allFeatures)[sev.id] || 0);
   }
-  // update mode button counts against current severity+date filtered set (before mode filter)
-  const preModeFiltered = allFeatures.filter(f => {
+  // update flag button counts against severity+date filtered set (before flag filter)
+  const preFlagFiltered = allFeatures.filter(f => {
     const { sev, isoDate } = f.properties;
     if (!activeFilters.severities.has(sev)) return false;
     if (activeFilters.dateFrom && isoDate && isoDate < activeFilters.dateFrom) return false;
     if (activeFilters.dateTo   && isoDate && isoDate > activeFilters.dateTo)   return false;
     return true;
   });
-  for (const mode of MODES) {
-    const el = document.querySelector(`[data-mode="${mode.id}"] .mode-count`);
+  for (const flag of FLAGS) {
+    const el = document.querySelector(`[data-flag="${flag.id}"] .mode-count`);
     if (!el) continue;
-    const count = preModeFiltered.filter(f => {
-      try { return (JSON.parse(f.properties.modeCounts || '{}')[mode.id] || 0) > 0; } catch(e) { return false; }
+    const count = preFlagFiltered.filter(f => {
+      try { return JSON.parse(f.properties.flags || '{}')[flag.id] === true; } catch(e) { return false; }
     }).length;
     el.textContent = formatNum(count);
   }
@@ -729,20 +738,30 @@ function buildPopupHTML(props) {
     }
   }
 
-  // show mode breakdown
-  let modeCounts;
-  try { modeCounts = JSON.parse(props.modeCounts || '{}'); } catch(e) { modeCounts = {}; }
-  const modeLines = MODES
-    .map(m => ({ label: m.label, icon: m.icon, count: modeCounts[m.id] || 0 }))
-    .filter(m => m.count > 0);
-  if (modeLines.length) {
-    rows += `<div class="popup-row popup-modes-header"><span class="pk">Involved</span></div>`;
-    for (const m of modeLines) {
-      rows += `<div class="popup-row popup-mode-row">
-        <span class="pk" style="padding-left:6px">${m.icon} ${m.label}</span>
-        <span class="pv">${m.count}</span>
-      </div>`;
-    }
+  // Crash number
+  const crashNum = raw[CONFIG.columns.crashNum];
+  if (crashNum) rows += popupRow('Crash #', crashNum);
+
+  // Crash type
+  const crashType = raw[CONFIG.columns.crashType];
+  if (crashType && crashType !== '') rows += popupRow('Crash Type', crashType);
+
+  // Fatalities + injuries
+  const numFat = parseInt(raw[CONFIG.columns.numFatalities]) || 0;
+  const numInj = parseInt(raw[CONFIG.columns.numInjured])    || 0;
+  if (numFat > 0) rows += popupRow('Fatalities', numFat);
+  if (numInj > 0) rows += popupRow('Injured',    numInj);
+
+  // Involvement flags — always show all with ✓ or ✗
+  let flags;
+  try { flags = JSON.parse(props.flags || '{}'); } catch(e) { flags = {}; }
+  rows += `<div class="popup-divider"></div>`;
+  const allFlagRows = FLAGS.map(f => ({ label: f.label, val: flags[f.id] === true }));
+  for (const f of allFlagRows) {
+    rows += `<div class="popup-row">
+      <span class="pk">${f.label}</span>
+      <span class="pv popup-flag-val ${f.val ? 'flag-yes' : 'flag-no'}">${f.val ? '✓' : '✗'}</span>
+    </div>`;
   }
 
   // show extras
@@ -806,38 +825,16 @@ function buildSevFilters() {
 /* ═══════════════════════════════════════════════════════════════
    BUILD MODE FILTER UI
 ═══════════════════════════════════════════════════════════════ */
-function buildModeFilters() {
+function buildFlagFilters() {
   const container = document.getElementById('mode-filters');
 
-  // "All modes" master toggle
-  const allBtn = document.createElement('button');
-  allBtn.className = 'mode-btn active';
-  allBtn.dataset.mode = '__all__';
-  allBtn.innerHTML = `
-    <span class="mode-icon">✦</span>
-    <span class="mode-name">All Modes</span>
-    <span class="mode-count"></span>
-    <span class="mode-check">
-      <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
-        <path d="M1 4l3 3 5-6" stroke="var(--bg)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-    </span>`;
-  allBtn.addEventListener('click', () => {
-    // reset to no mode filter
-    activeFilters.modes = null;
-    allBtn.classList.add('active');
-    container.querySelectorAll('[data-mode]:not([data-mode="__all__"])').forEach(b => b.classList.remove('active'));
-    refreshMap();
-  });
-  container.appendChild(allBtn);
-
-  for (const mode of MODES) {
+  for (const flag of FLAGS) {
     const btn = document.createElement('button');
     btn.className = 'mode-btn';
-    btn.dataset.mode = mode.id;
+    btn.dataset.flag = flag.id;
     btn.innerHTML = `
-      <span class="mode-icon">${mode.icon}</span>
-      <span class="mode-name">${mode.label}</span>
+      <span class="mode-icon"><i class="${flag.faClass}"></i></span>
+      <span class="mode-name">${flag.label}</span>
       <span class="mode-count">—</span>
       <span class="mode-check">
         <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
@@ -845,30 +842,18 @@ function buildModeFilters() {
         </svg>
       </span>`;
     btn.addEventListener('click', () => {
-      const modeId = mode.id;
-      // deactivate "All" button
-      allBtn.classList.remove('active');
-
-      if (activeFilters.modes === null) {
-        // switching from "all" → select only this mode
-        activeFilters.modes = new Set([modeId]);
-      } else if (activeFilters.modes.has(modeId)) {
-        activeFilters.modes.delete(modeId);
-        if (activeFilters.modes.size === 0) {
-          // nothing selected → revert to all
-          activeFilters.modes = null;
-          allBtn.classList.add('active');
-        }
+      const flagId = flag.id;
+      if (activeFilters.flags === null) {
+        activeFilters.flags = new Set([flagId]);
+      } else if (activeFilters.flags.has(flagId)) {
+        activeFilters.flags.delete(flagId);
+        if (activeFilters.flags.size === 0) activeFilters.flags = null;
       } else {
-        activeFilters.modes.add(modeId);
+        activeFilters.flags.add(flagId);
       }
-
-      // sync active classes on all mode buttons
-      container.querySelectorAll('[data-mode]:not([data-mode="__all__"])').forEach(b => {
-        b.classList.toggle('active', activeFilters.modes !== null && activeFilters.modes.has(b.dataset.mode));
+      container.querySelectorAll('[data-flag]').forEach(b => {
+        b.classList.toggle('active', activeFilters.flags !== null && activeFilters.flags.has(b.dataset.flag));
       });
-      if (activeFilters.modes === null) allBtn.classList.add('active');
-
       refreshMap();
     });
     container.appendChild(btn);
@@ -952,11 +937,9 @@ function resetFilters() {
   activeFilters.severities = new Set(SEVERITIES.map(s => s.id));
   document.querySelectorAll('.sev-btn').forEach(b => b.classList.add('active'));
 
-  // reset mode filter
-  activeFilters.modes = null;
-  document.querySelectorAll('#mode-filters [data-mode]').forEach(b => b.classList.remove('active'));
-  const allModeBtn = document.querySelector('#mode-filters [data-mode="__all__"]');
-  if (allModeBtn) allModeBtn.classList.add('active');
+  // reset flag filter
+  activeFilters.flags = null;
+  document.querySelectorAll('#mode-filters [data-flag]').forEach(b => b.classList.remove('active'));
 
   const fromInput = document.getElementById('date-from');
   const toInput   = document.getElementById('date-to');
@@ -1005,8 +988,8 @@ function addMapLayers() {
       ],
       'circle-color': [
         'match', ['get', 'sev'],
-        'fatal',   '#dc2626',
-        'serious', '#ea580c',
+        'fatal',   '#FE343B',
+        'serious', '#FEBC40',
         '#ffffff'
       ],
       'circle-opacity': 0.15,
@@ -1027,8 +1010,8 @@ function addMapLayers() {
       ],
       'circle-color': [
         'match', ['get', 'sev'],
-        'fatal',   '#dc2626',
-        'serious', '#ea580c',
+        'fatal',   '#FE343B',
+        'serious', '#FEBC40',
         '#94a3b8'
       ],
       'circle-opacity': [
@@ -1046,30 +1029,18 @@ function addMapLayers() {
   });
 
   // ─ hover cursor
-  map.on('mouseenter', 'crashes-circles', e => {
+  map.on('mouseenter', 'crashes-circles', () => {
     map.getCanvas().style.cursor = 'pointer';
-    const f = e.features[0];
-    const tip = document.getElementById('tooltip');
-    const sevLabel = SEVERITIES.find(s => s.id === f.properties.sev)?.label || f.properties.sev;
-    tip.textContent = sevLabel;
-    tip.style.opacity = '1';
-  });
-
-  map.on('mousemove', 'crashes-circles', e => {
-    const tip = document.getElementById('tooltip');
-    tip.style.left = (e.point.x + 12) + 'px';
-    tip.style.top  = (e.point.y - 10) + 'px';
   });
 
   map.on('mouseleave', 'crashes-circles', () => {
     map.getCanvas().style.cursor = '';
-    document.getElementById('tooltip').style.opacity = '0';
   });
 
-  // ─ click popup
+  // ─ click crash → open popup
   map.on('click', 'crashes-circles', e => {
+    e.preventDefault();
     const f = e.features[0];
-    // decode _raw (stored as JSON string by mapbox)
     let props = { ...f.properties };
     try { props._raw = JSON.parse(props._raw); } catch(e) { props._raw = {}; }
 
@@ -1077,6 +1048,12 @@ function addMapLayers() {
       .setLngLat(e.lngLat)
       .setHTML(buildPopupHTML(props))
       .addTo(map);
+
+  });
+
+  // ─ click map background → close popup
+  map.on('click', e => {
+    if (!e.defaultPrevented) popup.remove();
   });
 }
 
@@ -1103,14 +1080,24 @@ function generateDemoFeatures() {
       properties: {
         sev, year,
         isoDate: `${year}-${String(1+Math.floor(Math.random()*12)).padStart(2,'0')}-${String(1+Math.floor(Math.random()*27)).padStart(2,'0')}`,
-        modeCounts: JSON.stringify({
-          ped:       Math.random() > 0.7 ? Math.floor(Math.random()*2)+1 : 0,
-          bicyclist: Math.random() > 0.8 ? 1 : 0,
-          scooter:   Math.random() > 0.9 ? 1 : 0,
-          motorist:  Math.random() > 0.4 ? Math.floor(Math.random()*3)+1 : 0,
-          other:     Math.random() > 0.9 ? 1 : 0,
+        numFatalities: sev === 'fatal' ? Math.floor(Math.random()*2)+1 : 0,
+        numInjured:    sev === 'serious' ? Math.floor(Math.random()*3)+1 : 0,
+        flags: JSON.stringify({
+          alcohol:    Math.random() > 0.7,
+          pedestrian: Math.random() > 0.8,
+          hitandrun:  Math.random() > 0.85,
         }),
-        _raw: JSON.stringify({ date: `${year}-0${1+Math.floor(Math.random()*9)}-${10+Math.floor(Math.random()*18)}`, Note: 'Demo data' })
+        _raw: JSON.stringify({
+          date: `${year}-0${1+Math.floor(Math.random()*9)}-${10+Math.floor(Math.random()*18)}`,
+          NumFatalities: sev === 'fatal' ? 1 : 0,
+          NumInjured: sev === 'serious' ? Math.floor(Math.random()*3)+1 : 0,
+          VehCrashType: ['Rear End','Angle','Head On','Sideswipe','Pedestrian'][Math.floor(Math.random()*5)],
+          HitandRun: Math.random() > 0.85 ? 'True' : 'False',
+          AlcoholInvolved: Math.random() > 0.7 ? 'True' : 'False',
+          PedestrianInvolved: Math.random() > 0.8 ? 'True' : 'False',
+          MotorcycleInvolved: Math.random() > 0.85 ? 'True' : 'False',
+          Note: 'Demo data'
+        })
       }
     });
   }
@@ -1128,7 +1115,7 @@ async function init() {
 
   map = new mapboxgl.Map({
     container: 'map',
-    style: 'mapbox://styles/mapbox/light-v11',
+    style: 'mapbox://styles/mapbox/light-v8',
     center: CONFIG.initialCenter,
     zoom:   CONFIG.initialZoom,
     attributionControl: false,
@@ -1139,6 +1126,9 @@ async function init() {
   map.addControl(new mapboxgl.AttributionControl({ compact: true }), 'bottom-right');
 
   popup = new mapboxgl.Popup({ closeButton: true, closeOnClick: false, maxWidth: '300px' });
+
+  // ESC key closes popup
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') popup.remove(); });
 
   buildLegend();
   document.getElementById('reset-btn').addEventListener('click', resetFilters);
@@ -1164,7 +1154,7 @@ async function init() {
   }
 
   buildSevFilters();
-  buildModeFilters();
+  buildFlagFilters();
   buildYearSelectors();
   updateStats();
 
