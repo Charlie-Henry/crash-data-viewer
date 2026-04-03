@@ -15,20 +15,17 @@
   <style>
     /* ─── TOKENS ─── */
     :root {
-      --bg:        #0b0e14;
-      --surface:   #131720;
-      --surface2:  #1b2130;
-      --border:    #252d3d;
-      --text:      #e2e8f0;
-      --muted:     #64748b;
-      --accent:    #38bdf8;
+      --bg:        #f8f9fb;
+      --surface:   #ffffff;
+      --surface2:  #f1f4f8;
+      --border:    #dde2ea;
+      --text:      #1a2233;
+      --muted:     #6b7a99;
+      --accent:    #2563eb;
 
       /* severity palette */
-      --fatal:     #f43f5e;
-      --serious:   #fb923c;
-      --minor:     #facc15;
-      --property:  #4ade80;
-      --unknown:   #94a3b8;
+      --fatal:     #dc2626;
+      --serious:   #ea580c;
 
       --panel-w:   320px;
       --radius:    6px;
@@ -38,7 +35,7 @@
 
     /* ─── RESET ─── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: var(--sans); font-size: 14px; }
+    html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: var(--sans); font-size: 14px; -webkit-font-smoothing: antialiased; }
 
     /* ─── LAYOUT ─── */
     #app { display: flex; height: 100vh; width: 100vw; position: relative; }
@@ -60,7 +57,7 @@
     .panel-header {
       padding: 20px 18px 14px;
       border-bottom: 1px solid var(--border);
-      background: var(--bg);
+      background: var(--surface);
       flex-shrink: 0;
     }
     .panel-header .eyebrow {
@@ -70,6 +67,7 @@
       text-transform: uppercase;
       color: var(--accent);
       margin-bottom: 4px;
+      font-weight: 600;
     }
     .panel-header h1 {
       font-size: 17px;
@@ -152,7 +150,7 @@
       user-select: none;
     }
     .sev-btn:hover { border-color: var(--accent); }
-    .sev-btn.active { background: #1e2740; border-color: var(--accent); }
+    .sev-btn.active { background: #eff6ff; border-color: var(--accent); }
     .sev-dot {
       width: 12px; height: 12px;
       border-radius: 50%;
@@ -173,6 +171,8 @@
       flex-shrink: 0;
       transition: background .15s, border-color .15s;
     }
+    .sev-btn.active .sev-check svg path,
+    .mode-btn.active .mode-check svg path { stroke: #fff; }
     .sev-btn.active .sev-check {
       background: var(--accent);
       border-color: var(--accent);
@@ -201,13 +201,13 @@
       text-transform: uppercase;
       letter-spacing: .06em;
     }
-    .year-input-wrap select {
+    .year-input-wrap input[type="date"] {
       width: 100%;
       background: var(--surface2);
       border: 1px solid var(--border);
       border-radius: var(--radius);
       color: var(--text);
-      font-family: var(--mono);
+      font-family: var(--sans);
       font-size: 13px;
       padding: 7px 10px;
       cursor: pointer;
@@ -215,23 +215,8 @@
       appearance: none;
       -webkit-appearance: none;
     }
-    .year-input-wrap select:focus { border-color: var(--accent); }
-
-    /* map style toggle */
-    .style-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-    .style-btn {
-      padding: 8px 6px;
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      background: var(--surface2);
-      cursor: pointer;
-      text-align: center;
-      font-size: 11px;
-      color: var(--muted);
-      transition: all .15s;
-    }
-    .style-btn:hover { border-color: var(--accent); color: var(--text); }
-    .style-btn.active { border-color: var(--accent); color: var(--accent); background: #1e2740; }
+    .year-input-wrap input[type="date"]:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37,99,235,.1); }
+    .year-input-wrap input[type="date"]::-webkit-calendar-picker-indicator { opacity: 0.5; cursor: pointer; }
 
     /* legend */
     .legend { display: flex; flex-direction: column; gap: 5px; }
@@ -256,11 +241,45 @@
     }
     .reset-btn:hover { border-color: var(--accent); color: var(--accent); }
 
+    /* ─── MODE FILTER ─── */
+    .mode-grid { display: flex; flex-direction: column; gap: 6px; }
+    .mode-btn {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface2);
+      cursor: pointer;
+      transition: border-color .15s, background .15s;
+      user-select: none;
+      width: 100%;
+      text-align: left;
+    }
+    .mode-btn:hover { border-color: var(--accent); }
+    .mode-btn.active { background: #eff6ff; border-color: var(--accent); }
+    .mode-icon { font-size: 15px; line-height: 1; flex-shrink: 0; width: 20px; text-align: center; }
+    .mode-name { flex: 1; font-size: 13px; }
+    .mode-count { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+    .mode-check {
+      width: 16px; height: 16px;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      background: var(--surface);
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      transition: background .15s, border-color .15s;
+    }
+    .mode-btn.active .mode-check { background: var(--accent); border-color: var(--accent); }
+    .mode-check svg { display: none; }
+    .mode-btn.active .mode-check svg { display: block; }
+
     /* ─── LOADING OVERLAY ─── */
     #loading {
       position: fixed;
       inset: 0;
-      background: var(--bg);
+      background: #f8f9fb;
       z-index: 9999;
       display: flex;
       flex-direction: column;
@@ -282,16 +301,16 @@
 
     /* ─── POPUP ─── */
     .mapboxgl-popup-content {
-      background: var(--surface) !important;
+      background: #ffffff !important;
       border: 1px solid var(--border) !important;
       border-radius: var(--radius) !important;
       padding: 0 !important;
-      box-shadow: 0 8px 32px rgba(0,0,0,.5) !important;
+      box-shadow: 0 4px 20px rgba(0,0,0,.12) !important;
       min-width: 220px;
     }
     .mapboxgl-popup-tip { display: none !important; }
     .mapboxgl-popup-close-button {
-      color: var(--muted) !important;
+      color: #6b7a99 !important;
       font-size: 16px !important;
       padding: 6px 10px !important;
     }
@@ -316,13 +335,13 @@
     #tooltip {
       position: absolute;
       pointer-events: none;
-      background: var(--surface);
-      border: 1px solid var(--border);
+      background: #1a2233;
+      border: none;
       border-radius: 4px;
-      padding: 6px 10px;
+      padding: 5px 10px;
       font-family: var(--mono);
       font-size: 11px;
-      color: var(--text);
+      color: #ffffff;
       white-space: nowrap;
       opacity: 0;
       transition: opacity .1s;
@@ -333,7 +352,7 @@
     #config-banner {
       position: absolute;
       top: 16px; left: 50%; transform: translateX(-50%);
-      background: #7c3aed;
+      background: #2563eb;
       color: #fff;
       padding: 8px 16px;
       border-radius: 6px;
@@ -350,7 +369,7 @@
     /* ─── SCROLLBAR ─── */
     ::-webkit-scrollbar { width: 4px; }
     ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb { background: #c8d0de; border-radius: 4px; }
 
     /* ─── RESPONSIVE ─── */
     @media (max-width: 640px) {
@@ -393,11 +412,7 @@
       </div>
       <div class="stat serious">
         <span class="val" id="stat-serious">—</span>
-        <span class="lbl">Serious</span>
-      </div>
-      <div class="stat total">
-        <span class="val" id="stat-total">—</span>
-        <span class="lbl">Visible</span>
+        <span class="lbl">Serious Injury</span>
       </div>
     </div>
 
@@ -409,6 +424,12 @@
         <div class="sev-grid" id="sev-filters"></div>
       </div>
 
+      <!-- MODE FILTER -->
+      <div class="section">
+        <span class="section-label">Mode Involved</span>
+        <div class="mode-grid" id="mode-filters"></div>
+      </div>
+
       <!-- DATE FILTER -->
       <div class="section">
         <span class="section-label">Date Range</span>
@@ -416,24 +437,13 @@
           <div class="year-inputs">
             <div class="year-input-wrap">
               <label>From</label>
-              <select id="year-from"></select>
+              <input type="date" id="date-from" />
             </div>
             <div class="year-input-wrap">
               <label>To</label>
-              <select id="year-to"></select>
+              <input type="date" id="date-to" />
             </div>
           </div>
-        </div>
-      </div>
-
-      <!-- MAP STYLE -->
-      <div class="section">
-        <span class="section-label">Map Style</span>
-        <div class="style-grid">
-          <button class="style-btn active" data-style="mapbox://styles/mapbox/dark-v11">Dark</button>
-          <button class="style-btn" data-style="mapbox://styles/mapbox/light-v11">Light</button>
-          <button class="style-btn" data-style="mapbox://styles/mapbox/satellite-streets-v12">Satellite</button>
-          <button class="style-btn" data-style="mapbox://styles/mapbox/streets-v12">Streets</button>
         </div>
       </div>
 
@@ -479,7 +489,9 @@ const CONFIG = {
   // 4) Map severity values → display categories
   severityMap: {
     'fatal':          'fatal',
+    'Fatal':          'fatal',
     'serious injury': 'serious',
+    'Serious Injury': 'serious',
   },
 
   // 5) Initial map center (Las Vegas / Clark County)
@@ -491,12 +503,22 @@ const CONFIG = {
    SEVERITY DISPLAY CONFIG
 ═══════════════════════════════════════════════════════════════ */
 const SEVERITIES = [
-  { id: 'fatal',   label: 'Fatal',          color: '#f43f5e', radius: 7, zOffset: 20 },
-  { id: 'serious', label: 'Serious Injury', color: '#fb923c', radius: 5, zOffset: 10 },
-  { id: 'unknown', label: 'Unknown',        color: '#94a3b8', radius: 3, zOffset: 0  },
+  { id: 'fatal',   label: 'Fatal',          color: '#dc2626', radius: 6 },
+  { id: 'serious', label: 'Serious Injury', color: '#ea580c', radius: 6 },
 ];
 
 const SEV_COLOR_MAP = Object.fromEntries(SEVERITIES.map(s => [s.id, s.color]));
+
+/* ═══════════════════════════════════════════════════════════════
+   MODE CONFIG
+═══════════════════════════════════════════════════════════════ */
+const MODES = [
+  { id: 'ped',        label: 'Pedestrian',  icon: '🚶', cols: ['ped_fatalities',        'ped_injuries']        },
+  { id: 'bicyclist',  label: 'Bicyclist',   icon: '🚲', cols: ['bicyclist_fatalities',  'bicyclist_injuries']  },
+  { id: 'scooter',    label: 'Scooter',     icon: '🛴', cols: ['scooter_fatalities',    'scooter_injuries']    },
+  { id: 'motorist',   label: 'Motorist',    icon: '🚗', cols: ['motorist_fatalities',   'motorist_injuries']   },
+  { id: 'other',      label: 'Other',       icon: '•',  cols: ['other_fatalities',      'other_injuries']      },
+];
 
 /* ═══════════════════════════════════════════════════════════════
    STATE
@@ -504,8 +526,9 @@ const SEV_COLOR_MAP = Object.fromEntries(SEVERITIES.map(s => [s.id, s.color]));
 let allFeatures = [];
 let activeFilters = {
   severities: new Set(SEVERITIES.map(s => s.id)),
-  yearFrom: null,
-  yearTo:   null,
+  modes:      null,
+  dateFrom:   null,
+  dateTo:     null,
 };
 let map, popup;
 
@@ -588,7 +611,20 @@ function csvToFeatures(rows) {
     const sev  = parseSeverity(row[severity]);
     const year = parseYear(row[date]);
 
-    const props = { sev, year, _raw: row };
+    // Store ISO date string (YYYY-MM-DD) for date range filtering
+    let isoDate = null;
+    if (row[date]) {
+      const d = new Date(row[date]);
+      if (!isNaN(d)) isoDate = d.toISOString().slice(0, 10);
+    }
+
+    // Extract mode counts (parse as integers, default 0)
+    const modeCounts = {};
+    for (const mode of MODES) {
+      modeCounts[mode.id] = mode.cols.reduce((sum, col) => sum + (parseInt(row[col]) || 0), 0);
+    }
+
+    const props = { sev, year, isoDate, modeCounts: JSON.stringify(modeCounts), _raw: row };
     features.push({
       type: 'Feature',
       geometry: { type: 'Point', coordinates: [lo, la] },
@@ -603,10 +639,17 @@ function csvToFeatures(rows) {
 ═══════════════════════════════════════════════════════════════ */
 function filteredFeatures() {
   return allFeatures.filter(f => {
-    const { sev, year } = f.properties;
+    const { sev, isoDate } = f.properties;
     if (!activeFilters.severities.has(sev)) return false;
-    if (activeFilters.yearFrom && year && year < activeFilters.yearFrom) return false;
-    if (activeFilters.yearTo   && year && year > activeFilters.yearTo)   return false;
+    if (activeFilters.dateFrom && isoDate && isoDate < activeFilters.dateFrom) return false;
+    if (activeFilters.dateTo   && isoDate && isoDate > activeFilters.dateTo)   return false;
+    // Mode filter: crash must have count > 0 for at least one active mode
+    if (activeFilters.modes !== null) {
+      let modeCounts;
+      try { modeCounts = JSON.parse(f.properties.modeCounts || '{}'); } catch(e) { modeCounts = {}; }
+      const involvedInAny = [...activeFilters.modes].some(m => (modeCounts[m] || 0) > 0);
+      if (!involvedInAny) return false;
+    }
     return true;
   });
 }
@@ -625,12 +668,27 @@ function updateStats() {
   const counts  = countBySev(visible);
   document.getElementById('stat-fatal').textContent   = formatNum(counts.fatal   || 0);
   document.getElementById('stat-serious').textContent = formatNum(counts.serious || 0);
-  document.getElementById('stat-total').textContent   = formatNum(visible.length);
 
-  // update sev button counts
+  // update sev button counts (always show total-data counts, not filtered)
   for (const sev of SEVERITIES) {
     const el = document.querySelector(`[data-sev="${sev.id}"] .sev-count`);
     if (el) el.textContent = formatNum(countBySev(allFeatures)[sev.id] || 0);
+  }
+  // update mode button counts against current severity+date filtered set (before mode filter)
+  const preModeFiltered = allFeatures.filter(f => {
+    const { sev, isoDate } = f.properties;
+    if (!activeFilters.severities.has(sev)) return false;
+    if (activeFilters.dateFrom && isoDate && isoDate < activeFilters.dateFrom) return false;
+    if (activeFilters.dateTo   && isoDate && isoDate > activeFilters.dateTo)   return false;
+    return true;
+  });
+  for (const mode of MODES) {
+    const el = document.querySelector(`[data-mode="${mode.id}"] .mode-count`);
+    if (!el) continue;
+    const count = preModeFiltered.filter(f => {
+      try { return (JSON.parse(f.properties.modeCounts || '{}')[mode.id] || 0) > 0; } catch(e) { return false; }
+    }).length;
+    el.textContent = formatNum(count);
   }
 }
 
@@ -668,6 +726,22 @@ function buildPopupHTML(props) {
       rows += popupRow('Time', timePart);
     } else {
       rows += popupRow('Date', dateVal);
+    }
+  }
+
+  // show mode breakdown
+  let modeCounts;
+  try { modeCounts = JSON.parse(props.modeCounts || '{}'); } catch(e) { modeCounts = {}; }
+  const modeLines = MODES
+    .map(m => ({ label: m.label, icon: m.icon, count: modeCounts[m.id] || 0 }))
+    .filter(m => m.count > 0);
+  if (modeLines.length) {
+    rows += `<div class="popup-row popup-modes-header"><span class="pk">Involved</span></div>`;
+    for (const m of modeLines) {
+      rows += `<div class="popup-row popup-mode-row">
+        <span class="pk" style="padding-left:6px">${m.icon} ${m.label}</span>
+        <span class="pv">${m.count}</span>
+      </div>`;
     }
   }
 
@@ -730,44 +804,129 @@ function buildSevFilters() {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   BUILD YEAR SELECTORS
+   BUILD MODE FILTER UI
 ═══════════════════════════════════════════════════════════════ */
-function buildYearSelectors() {
-  const years = [...new Set(
-    allFeatures.map(f => f.properties.year).filter(Boolean)
-  )].sort();
+function buildModeFilters() {
+  const container = document.getElementById('mode-filters');
 
-  if (years.length === 0) return;
+  // "All modes" master toggle
+  const allBtn = document.createElement('button');
+  allBtn.className = 'mode-btn active';
+  allBtn.dataset.mode = '__all__';
+  allBtn.innerHTML = `
+    <span class="mode-icon">✦</span>
+    <span class="mode-name">All Modes</span>
+    <span class="mode-count"></span>
+    <span class="mode-check">
+      <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+        <path d="M1 4l3 3 5-6" stroke="var(--bg)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </span>`;
+  allBtn.addEventListener('click', () => {
+    // reset to no mode filter
+    activeFilters.modes = null;
+    allBtn.classList.add('active');
+    container.querySelectorAll('[data-mode]:not([data-mode="__all__"])').forEach(b => b.classList.remove('active'));
+    refreshMap();
+  });
+  container.appendChild(allBtn);
 
-  const minY = years[0], maxY = years[years.length - 1];
-  activeFilters.yearFrom = minY;
-  activeFilters.yearTo   = maxY;
+  for (const mode of MODES) {
+    const btn = document.createElement('button');
+    btn.className = 'mode-btn';
+    btn.dataset.mode = mode.id;
+    btn.innerHTML = `
+      <span class="mode-icon">${mode.icon}</span>
+      <span class="mode-name">${mode.label}</span>
+      <span class="mode-count">—</span>
+      <span class="mode-check">
+        <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+          <path d="M1 4l3 3 5-6" stroke="var(--bg)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </span>`;
+    btn.addEventListener('click', () => {
+      const modeId = mode.id;
+      // deactivate "All" button
+      allBtn.classList.remove('active');
 
-  const fromSel = document.getElementById('year-from');
-  const toSel   = document.getElementById('year-to');
+      if (activeFilters.modes === null) {
+        // switching from "all" → select only this mode
+        activeFilters.modes = new Set([modeId]);
+      } else if (activeFilters.modes.has(modeId)) {
+        activeFilters.modes.delete(modeId);
+        if (activeFilters.modes.size === 0) {
+          // nothing selected → revert to all
+          activeFilters.modes = null;
+          allBtn.classList.add('active');
+        }
+      } else {
+        activeFilters.modes.add(modeId);
+      }
 
-  for (const y of years) {
-    fromSel.add(new Option(y, y));
-    toSel.add(new Option(y, y));
+      // sync active classes on all mode buttons
+      container.querySelectorAll('[data-mode]:not([data-mode="__all__"])').forEach(b => {
+        b.classList.toggle('active', activeFilters.modes !== null && activeFilters.modes.has(b.dataset.mode));
+      });
+      if (activeFilters.modes === null) allBtn.classList.add('active');
+
+      refreshMap();
+    });
+    container.appendChild(btn);
   }
-  fromSel.value = minY;
-  toSel.value   = maxY;
+}
 
-  document.getElementById('date-range-label').textContent = `${minY} – ${maxY}`;
+/* ═══════════════════════════════════════════════════════════════
+   BUILD DATE SELECTORS
+═══════════════════════════════════════════════════════════════ */
+function toDateStr(d) {
+  // returns YYYY-MM-DD string from a Date object
+  return d.toISOString().slice(0, 10);
+}
 
-  fromSel.addEventListener('change', () => {
-    activeFilters.yearFrom = parseInt(fromSel.value);
-    if (activeFilters.yearFrom > activeFilters.yearTo) {
-      activeFilters.yearTo = activeFilters.yearFrom;
-      toSel.value = fromSel.value;
+function buildYearSelectors() {
+  const dates = allFeatures
+    .map(f => f.properties.isoDate)
+    .filter(Boolean)
+    .sort();
+
+  if (dates.length === 0) return;
+
+  const minDate = dates[0];
+  const maxDate = dates[dates.length - 1];
+
+  activeFilters.dateFrom = minDate;
+  activeFilters.dateTo   = maxDate;
+
+  const fromInput = document.getElementById('date-from');
+  const toInput   = document.getElementById('date-to');
+
+  fromInput.min = minDate;
+  fromInput.max = maxDate;
+  fromInput.value = minDate;
+
+  toInput.min = minDate;
+  toInput.max = maxDate;
+  toInput.value = maxDate;
+
+  const fmt = s => {
+    const d = new Date(s + 'T00:00:00');
+    return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  };
+  document.getElementById('date-range-label').textContent = `${fmt(minDate)} – ${fmt(maxDate)}`;
+
+  fromInput.addEventListener('change', () => {
+    activeFilters.dateFrom = fromInput.value;
+    if (fromInput.value > toInput.value) {
+      toInput.value = fromInput.value;
+      activeFilters.dateTo = fromInput.value;
     }
     refreshMap();
   });
-  toSel.addEventListener('change', () => {
-    activeFilters.yearTo = parseInt(toSel.value);
-    if (activeFilters.yearTo < activeFilters.yearFrom) {
-      activeFilters.yearFrom = activeFilters.yearTo;
-      fromSel.value = toSel.value;
+  toInput.addEventListener('change', () => {
+    activeFilters.dateTo = toInput.value;
+    if (toInput.value < fromInput.value) {
+      fromInput.value = toInput.value;
+      activeFilters.dateFrom = toInput.value;
     }
     refreshMap();
   });
@@ -787,34 +946,25 @@ function buildLegend() {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   MAP STYLE SWITCHER
-═══════════════════════════════════════════════════════════════ */
-function buildStyleSwitcher() {
-  document.querySelectorAll('.style-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.style-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      map.setStyle(btn.dataset.style);
-      // re-add layers after style loads
-      map.once('styledata', addMapLayers);
-    });
-  });
-}
-
-/* ═══════════════════════════════════════════════════════════════
    RESET
 ═══════════════════════════════════════════════════════════════ */
 function resetFilters() {
   activeFilters.severities = new Set(SEVERITIES.map(s => s.id));
   document.querySelectorAll('.sev-btn').forEach(b => b.classList.add('active'));
 
-  const years = [...document.getElementById('year-from').options].map(o => parseInt(o.value));
-  if (years.length) {
-    const minY = Math.min(...years), maxY = Math.max(...years);
-    activeFilters.yearFrom = minY;
-    activeFilters.yearTo   = maxY;
-    document.getElementById('year-from').value = minY;
-    document.getElementById('year-to').value   = maxY;
+  // reset mode filter
+  activeFilters.modes = null;
+  document.querySelectorAll('#mode-filters [data-mode]').forEach(b => b.classList.remove('active'));
+  const allModeBtn = document.querySelector('#mode-filters [data-mode="__all__"]');
+  if (allModeBtn) allModeBtn.classList.add('active');
+
+  const fromInput = document.getElementById('date-from');
+  const toInput   = document.getElementById('date-to');
+  if (fromInput && toInput) {
+    activeFilters.dateFrom = fromInput.min;
+    activeFilters.dateTo   = toInput.max;
+    fromInput.value = fromInput.min;
+    toInput.value   = toInput.max;
   }
   refreshMap();
   map.flyTo({ center: CONFIG.initialCenter, zoom: CONFIG.initialZoom });
@@ -855,8 +1005,8 @@ function addMapLayers() {
       ],
       'circle-color': [
         'match', ['get', 'sev'],
-        'fatal',   '#f43f5e',
-        'serious', '#fb923c',
+        'fatal',   '#dc2626',
+        'serious', '#ea580c',
         '#ffffff'
       ],
       'circle-opacity': 0.15,
@@ -872,15 +1022,13 @@ function addMapLayers() {
     paint: {
       'circle-radius': [
         'interpolate', ['linear'], ['zoom'],
-        8,  ['match', ['get', 'sev'], 'fatal', 5, 'serious', 4, 'minor', 3, 2],
-        14, ['match', ['get', 'sev'], 'fatal', 9, 'serious', 7, 'minor', 5, 4],
+        8,  6,
+        14, 10,
       ],
       'circle-color': [
         'match', ['get', 'sev'],
-        'fatal',    '#f43f5e',
-        'serious',  '#fb923c',
-        'minor',    '#facc15',
-        'property', '#4ade80',
+        'fatal',   '#dc2626',
+        'serious', '#ea580c',
         '#94a3b8'
       ],
       'circle-opacity': [
@@ -888,11 +1036,11 @@ function addMapLayers() {
         8, 0.75,
         14, 0.9
       ],
-      'circle-stroke-color': 'rgba(0,0,0,0.5)',
+      'circle-stroke-color': '#ffffff',
       'circle-stroke-width': 0.5,
       'circle-sort-key': [
         'match', ['get', 'sev'],
-        'fatal', 4, 'serious', 3, 'minor', 2, 1
+        'fatal', 2, 'serious', 1, 0
       ],
     }
   });
@@ -938,7 +1086,7 @@ function addMapLayers() {
 function generateDemoFeatures() {
   // Scatter demo points around Las Vegas valley
   const center = [-115.14, 36.17];
-  const sevs = ['fatal','fatal','serious','serious','serious','minor','minor','minor','property','unknown'];
+  const sevs = ['fatal', 'fatal', 'serious', 'serious', 'serious'];
   const features = [];
   for (let i = 0; i < 400; i++) {
     const sev = sevs[Math.floor(Math.random() * sevs.length)];
@@ -954,7 +1102,15 @@ function generateDemoFeatures() {
       },
       properties: {
         sev, year,
-        _raw: JSON.stringify({ COLLISION_DATE: `${year}-0${1+Math.floor(Math.random()*9)}-${10+Math.floor(Math.random()*18)}`, Note: 'Demo data' })
+        isoDate: `${year}-${String(1+Math.floor(Math.random()*12)).padStart(2,'0')}-${String(1+Math.floor(Math.random()*27)).padStart(2,'0')}`,
+        modeCounts: JSON.stringify({
+          ped:       Math.random() > 0.7 ? Math.floor(Math.random()*2)+1 : 0,
+          bicyclist: Math.random() > 0.8 ? 1 : 0,
+          scooter:   Math.random() > 0.9 ? 1 : 0,
+          motorist:  Math.random() > 0.4 ? Math.floor(Math.random()*3)+1 : 0,
+          other:     Math.random() > 0.9 ? 1 : 0,
+        }),
+        _raw: JSON.stringify({ date: `${year}-0${1+Math.floor(Math.random()*9)}-${10+Math.floor(Math.random()*18)}`, Note: 'Demo data' })
       }
     });
   }
@@ -972,7 +1128,7 @@ async function init() {
 
   map = new mapboxgl.Map({
     container: 'map',
-    style: 'mapbox://styles/mapbox/dark-v11',
+    style: 'mapbox://styles/mapbox/light-v11',
     center: CONFIG.initialCenter,
     zoom:   CONFIG.initialZoom,
     attributionControl: false,
@@ -985,7 +1141,6 @@ async function init() {
   popup = new mapboxgl.Popup({ closeButton: true, closeOnClick: false, maxWidth: '300px' });
 
   buildLegend();
-  buildStyleSwitcher();
   document.getElementById('reset-btn').addEventListener('click', resetFilters);
 
   setLoading('Loading crash data…');
@@ -1009,6 +1164,7 @@ async function init() {
   }
 
   buildSevFilters();
+  buildModeFilters();
   buildYearSelectors();
   updateStats();
 
