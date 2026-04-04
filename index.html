@@ -513,9 +513,10 @@ const SEV_COLOR_MAP = Object.fromEntries(SEVERITIES.map(s => [s.id, s.color]));
    INVOLVEMENT FLAGS CONFIG
 ═══════════════════════════════════════════════════════════════ */
 const FLAGS = [
-  { id: 'alcohol',    label: 'Alcohol Involved',    faClass: 'fa-solid fa-wine-glass', col: 'alcohol'    },
-  { id: 'pedestrian', label: 'Pedestrian Involved', faClass: 'fa-solid fa-walking',         col: 'pedestrian' },
-  { id: 'hitandrun',  label: 'Hit & Run',           faClass: 'fa-solid fa-car-burst',       col: 'hitandrun'  },
+  { id: 'alcohol',    label: 'Alcohol Involved',    faClass: 'fa-solid fa-wine-glass',  col: 'alcohol'    },
+  { id: 'pedestrian', label: 'Pedestrian Involved', faClass: 'fa-solid fa-walking',      col: 'pedestrian' },
+  { id: 'motorcycle', label: 'Motorcycle Involved', faClass: 'fa-solid fa-motorcycle',   col: 'motorcycle' },
+  { id: 'hitandrun',  label: 'Hit & Run',           faClass: 'fa-solid fa-car-burst',    col: 'hitandrun'  },
 ];
 
 /* ═══════════════════════════════════════════════════════════════
@@ -622,6 +623,7 @@ function csvToFeatures(rows) {
     const flags = {
       alcohol:    parseFlag(row[cols.alcohol]),
       pedestrian: parseFlag(row[cols.pedestrian]),
+      motorcycle: parseFlag(row[cols.motorcycle]),
       hitandrun:  parseFlag(row[cols.hitAndRun]),
     };
 
@@ -1085,7 +1087,8 @@ function generateDemoFeatures() {
         flags: JSON.stringify({
           alcohol:    Math.random() > 0.7,
           pedestrian: Math.random() > 0.8,
-          hitandrun:  Math.random() > 0.85,
+          motorcycle: Math.random() > 0.85,
+          hitandrun:  Math.random() > 0.9,
         }),
         _raw: JSON.stringify({
           date: `${year}-0${1+Math.floor(Math.random()*9)}-${10+Math.floor(Math.random()*18)}`,
