@@ -397,6 +397,44 @@
     .chart-row.active .chart-bar { background: var(--accent); }
     .chart-count { font-family: var(--mono); font-size: 10px; color: var(--muted); width: 28px; text-align: right; flex-shrink: 0; }
 
+    /* ─── DAY OF WEEK ─── */
+    .dow-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+    .dow-day {
+      aspect-ratio: 1;
+      border-radius: 5px;
+      border: 1.5px solid transparent;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      cursor: pointer;
+      transition: border-color .15s, transform .1s;
+      position: relative;
+      overflow: hidden;
+      gap: 2px;
+    }
+    .dow-day:hover { border-color: var(--accent); transform: scale(1.06); }
+    .dow-day.active { border-color: var(--accent) !important; }
+    .dow-day .dow-label {
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 600;
+      position: relative;
+      z-index: 1;
+      line-height: 1;
+    }
+    .dow-day .dow-count {
+      font-family: var(--mono);
+      font-size: 9px;
+      position: relative;
+      z-index: 1;
+      line-height: 1;
+    }
+    .dow-day .dow-bg {
+      position: absolute;
+      inset: 0;
+      border-radius: 4px;
+      transition: opacity .3s;
+    }
+
     /* ─── RESPONSIVE ─── */
     @media (max-width: 640px) {
       :root { --panel-w: 100vw; }
@@ -475,6 +513,12 @@
       <div class="section">
         <span class="section-label">Time of Day</span>
         <div class="chart-wrap" id="time-chart"></div>
+      </div>
+
+      <!-- DAY OF WEEK -->
+      <div class="section">
+        <span class="section-label">Day of Week</span>
+        <div class="dow-grid" id="dow-chart"></div>
       </div>
 
       <!-- LEGEND -->
@@ -574,6 +618,16 @@ const TIME_SLOTS = [
   { label: '8PM–12AM', startHour: 20, endHour: 24 },
 ];
 
+const DOW_DAYS = [
+  { label: 'Su', fullLabel: 'Sunday',    dow: 0 },
+  { label: 'Mo', fullLabel: 'Monday',    dow: 1 },
+  { label: 'Tu', fullLabel: 'Tuesday',   dow: 2 },
+  { label: 'We', fullLabel: 'Wednesday', dow: 3 },
+  { label: 'Th', fullLabel: 'Thursday',  dow: 4 },
+  { label: 'Fr', fullLabel: 'Friday',    dow: 5 },
+  { label: 'Sa', fullLabel: 'Saturday',  dow: 6 },
+];
+
 /* ═══════════════════════════════════════════════════════════════
    STATE
 ═══════════════════════════════════════════════════════════════ */
@@ -584,6 +638,7 @@ let activeFilters = {
   dateFrom:   null,
   dateTo:     null,
   timeSlot:   null, // null = all times; 0-5 = index into TIME_SLOTS
+  dowDays:    null, // null = all days; Set of dow integers (0=Sun … 6=Sat)
 };
 let map, popup;
 
@@ -669,11 +724,13 @@ function csvToFeatures(rows) {
     // Store ISO date string (YYYY-MM-DD) and hour for filtering
     let isoDate = null;
     let hour = null;
+    let dow  = null;
     if (row[date]) {
       const d = new Date(row[date]);
       if (!isNaN(d)) {
         isoDate = d.toISOString().slice(0, 10);
         hour = d.getHours();
+        dow  = d.getDay();
       }
     }
 
@@ -691,7 +748,7 @@ function csvToFeatures(rows) {
     const numFatalities = parseInt(row[cols.numFatalities]) || 0;
     const numInjured    = parseInt(row[cols.numInjured])    || 0;
 
-    const props = { sev, year, isoDate, hour, numFatalities, numInjured,
+    const props = { sev, year, isoDate, hour, dow, numFatalities, numInjured,
                     flags: JSON.stringify(flags), _raw: row };
     features.push({
       type: 'Feature',
@@ -723,6 +780,11 @@ function filteredFeatures() {
       const slot = TIME_SLOTS[activeFilters.timeSlot];
       const h = f.properties.hour;
       if (h === null || h === undefined || h < slot.startHour || h >= slot.endHour) return false;
+    }
+    // Day of week filter
+    if (activeFilters.dowDays !== null) {
+      const d = f.properties.dow;
+      if (d === null || d === undefined || !activeFilters.dowDays.has(d)) return false;
     }
     return true;
   });
@@ -768,6 +830,7 @@ function updateStats() {
     el.textContent = formatNum(count);
   }
   updateChart();
+  updateDowChart();
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -1024,6 +1087,10 @@ function resetFilters() {
   // reset time slot
   activeFilters.timeSlot = null;
 
+  // reset day of week
+  activeFilters.dowDays = null;
+  document.querySelectorAll('#dow-chart .dow-day').forEach(b => b.classList.remove('active'));
+
   const fromInput = document.getElementById('date-from');
   const toInput   = document.getElementById('date-to');
   if (fromInput && toInput) {
@@ -1164,6 +1231,7 @@ function generateDemoFeatures() {
         sev, year,
         isoDate: `${year}-${String(1+Math.floor(Math.random()*12)).padStart(2,'0')}-${String(1+Math.floor(Math.random()*27)).padStart(2,'0')}`,
         hour: Math.floor(Math.random() * 24),
+        dow:  Math.floor(Math.random() * 7),
         numFatalities: sev === 'fatal' ? Math.floor(Math.random()*2)+1 : 0,
         numInjured:    sev === 'serious' ? Math.floor(Math.random()*3)+1 : 0,
         flags: JSON.stringify({
@@ -1256,6 +1324,83 @@ function buildChart() {
 }
 
 /* ═══════════════════════════════════════════════════════════════
+   DAY OF WEEK CHART
+═══════════════════════════════════════════════════════════════ */
+function getPreDowFiltered() {
+  return allFeatures.filter(f => {
+    const { sev, isoDate } = f.properties;
+    if (!activeFilters.severities.has(sev)) return false;
+    if (activeFilters.dateFrom && isoDate && isoDate < activeFilters.dateFrom) return false;
+    if (activeFilters.dateTo   && isoDate && isoDate > activeFilters.dateTo)   return false;
+    if (activeFilters.flags !== null) {
+      let flags;
+      try { flags = JSON.parse(f.properties.flags || '{}'); } catch(e) { flags = {}; }
+      if (![...activeFilters.flags].some(id => flags[id] === true)) return false;
+    }
+    if (activeFilters.timeSlot !== null) {
+      const slot = TIME_SLOTS[activeFilters.timeSlot];
+      const h = f.properties.hour;
+      if (h === null || h === undefined || h < slot.startHour || h >= slot.endHour) return false;
+    }
+    return true;
+  });
+}
+
+function updateDowChart() {
+  const container = document.getElementById('dow-chart');
+  if (!container) return;
+
+  const base = getPreDowFiltered();
+  const counts = DOW_DAYS.map(d => base.filter(f => f.properties.dow === d.dow).length);
+  const maxCount = Math.max(...counts, 1);
+
+  container.querySelectorAll('.dow-day').forEach((el, i) => {
+    const count = counts[i];
+    const intensity = count / maxCount;
+    // shade from light grey → dark navy using intensity
+    const bg = el.querySelector('.dow-bg');
+    bg.style.background = '#1a2233';
+    bg.style.opacity = (0.06 + intensity * 0.88).toFixed(2);
+    el.querySelector('.dow-count').textContent = count;
+
+    const isActive = activeFilters.dowDays !== null && activeFilters.dowDays.has(i);
+    el.classList.toggle('active', isActive);
+    // text color: dark on light bg, light on dark bg
+    const textColor = intensity > 0.5 ? '#ffffff' : 'var(--text)';
+    el.querySelector('.dow-label').style.color = textColor;
+    el.querySelector('.dow-count').style.color = intensity > 0.5 ? 'rgba(255,255,255,0.7)' : 'var(--muted)';
+  });
+}
+
+function buildDowChart() {
+  const container = document.getElementById('dow-chart');
+
+  DOW_DAYS.forEach((day, i) => {
+    const el = document.createElement('div');
+    el.className = 'dow-day';
+    el.title = day.fullLabel;
+    el.innerHTML = `
+      <div class="dow-bg"></div>
+      <span class="dow-label">${day.label}</span>
+      <span class="dow-count">—</span>`;
+
+    el.addEventListener('click', () => {
+      if (activeFilters.dowDays === null) {
+        activeFilters.dowDays = new Set([i]);
+      } else if (activeFilters.dowDays.has(i)) {
+        activeFilters.dowDays.delete(i);
+        if (activeFilters.dowDays.size === 0) activeFilters.dowDays = null;
+      } else {
+        activeFilters.dowDays.add(i);
+      }
+      refreshMap();
+    });
+
+    container.appendChild(el);
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════
    INIT
 ═══════════════════════════════════════════════════════════════ */
 async function init() {
@@ -1312,6 +1457,7 @@ async function init() {
   buildSevFilters();
   buildFlagFilters();
   buildChart();
+  buildDowChart();
   buildYearSelectors();
   updateStats();
 
