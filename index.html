@@ -385,6 +385,18 @@
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: #c8d0de; border-radius: 4px; }
 
+    /* ─── TIME CHART ─── */
+    .chart-wrap { display: flex; flex-direction: column; gap: 5px; }
+    .chart-row { display: flex; align-items: center; gap: 8px; cursor: pointer; border-radius: 4px; padding: 2px 4px; transition: background .12s; }
+    .chart-row:hover { background: var(--surface2); }
+    .chart-row.active { background: #eff6ff; }
+    .chart-label { font-family: var(--mono); font-size: 10px; color: var(--muted); width: 72px; flex-shrink: 0; text-align: right; }
+    .chart-row.active .chart-label { color: var(--accent); font-weight: 600; }
+    .chart-bar-wrap { flex: 1; background: var(--surface2); border-radius: 3px; height: 18px; overflow: hidden; }
+    .chart-bar { height: 100%; background: #1a2233; border-radius: 3px; transition: width .35s ease; min-width: 0; }
+    .chart-row.active .chart-bar { background: var(--accent); }
+    .chart-count { font-family: var(--mono); font-size: 10px; color: var(--muted); width: 28px; text-align: right; flex-shrink: 0; }
+
     /* ─── RESPONSIVE ─── */
     @media (max-width: 640px) {
       :root { --panel-w: 100vw; }
@@ -457,6 +469,12 @@
             </div>
           </div>
         </div>
+      </div>
+
+      <!-- TIME OF DAY CHART -->
+      <div class="section">
+        <span class="section-label">Time of Day</span>
+        <div class="chart-wrap" id="time-chart"></div>
       </div>
 
       <!-- LEGEND -->
@@ -545,14 +563,27 @@ const FLAGS = [
 ];
 
 /* ═══════════════════════════════════════════════════════════════
+   TIME SLOTS CONFIG
+═══════════════════════════════════════════════════════════════ */
+const TIME_SLOTS = [
+  { label: '12AM–4AM', startHour: 0,  endHour: 4  },
+  { label: '4AM–8AM',  startHour: 4,  endHour: 8  },
+  { label: '8AM–12PM', startHour: 8,  endHour: 12 },
+  { label: '12PM–4PM', startHour: 12, endHour: 16 },
+  { label: '4PM–8PM',  startHour: 16, endHour: 20 },
+  { label: '8PM–12AM', startHour: 20, endHour: 24 },
+];
+
+/* ═══════════════════════════════════════════════════════════════
    STATE
 ═══════════════════════════════════════════════════════════════ */
 let allFeatures = [];
 let activeFilters = {
   severities: new Set(SEVERITIES.map(s => s.id)),
-  flags:      null, // null = no flag filter (show all); Set of flag ids = must match at least one
+  flags:      null,
   dateFrom:   null,
   dateTo:     null,
+  timeSlot:   null, // null = all times; 0-5 = index into TIME_SLOTS
 };
 let map, popup;
 
@@ -635,11 +666,15 @@ function csvToFeatures(rows) {
     const sev  = parseSeverity(row[severity]);
     const year = parseYear(row[date]);
 
-    // Store ISO date string (YYYY-MM-DD) for date range filtering
+    // Store ISO date string (YYYY-MM-DD) and hour for filtering
     let isoDate = null;
+    let hour = null;
     if (row[date]) {
       const d = new Date(row[date]);
-      if (!isNaN(d)) isoDate = d.toISOString().slice(0, 10);
+      if (!isNaN(d)) {
+        isoDate = d.toISOString().slice(0, 10);
+        hour = d.getHours();
+      }
     }
 
     // Extract boolean involvement flags
@@ -656,7 +691,7 @@ function csvToFeatures(rows) {
     const numFatalities = parseInt(row[cols.numFatalities]) || 0;
     const numInjured    = parseInt(row[cols.numInjured])    || 0;
 
-    const props = { sev, year, isoDate, numFatalities, numInjured,
+    const props = { sev, year, isoDate, hour, numFatalities, numInjured,
                     flags: JSON.stringify(flags), _raw: row };
     features.push({
       type: 'Feature',
@@ -682,6 +717,12 @@ function filteredFeatures() {
       try { flags = JSON.parse(f.properties.flags || '{}'); } catch(e) { flags = {}; }
       const matchesAny = [...activeFilters.flags].some(id => flags[id] === true);
       if (!matchesAny) return false;
+    }
+    // Time slot filter
+    if (activeFilters.timeSlot !== null) {
+      const slot = TIME_SLOTS[activeFilters.timeSlot];
+      const h = f.properties.hour;
+      if (h === null || h === undefined || h < slot.startHour || h >= slot.endHour) return false;
     }
     return true;
   });
@@ -726,6 +767,7 @@ function updateStats() {
     }).length;
     el.textContent = formatNum(count);
   }
+  updateChart();
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -979,6 +1021,9 @@ function resetFilters() {
   activeFilters.flags = null;
   document.querySelectorAll('#mode-filters [data-flag]').forEach(b => b.classList.remove('active'));
 
+  // reset time slot
+  activeFilters.timeSlot = null;
+
   const fromInput = document.getElementById('date-from');
   const toInput   = document.getElementById('date-to');
   if (fromInput && toInput) {
@@ -1118,6 +1163,7 @@ function generateDemoFeatures() {
       properties: {
         sev, year,
         isoDate: `${year}-${String(1+Math.floor(Math.random()*12)).padStart(2,'0')}-${String(1+Math.floor(Math.random()*27)).padStart(2,'0')}`,
+        hour: Math.floor(Math.random() * 24),
         numFatalities: sev === 'fatal' ? Math.floor(Math.random()*2)+1 : 0,
         numInjured:    sev === 'serious' ? Math.floor(Math.random()*3)+1 : 0,
         flags: JSON.stringify({
@@ -1145,6 +1191,71 @@ function generateDemoFeatures() {
 }
 
 /* ═══════════════════════════════════════════════════════════════
+   TIME OF DAY CHART
+═══════════════════════════════════════════════════════════════ */
+function updateChart() {
+  const container = document.getElementById('time-chart');
+  if (!container) return;
+
+  // Count crashes per slot from features that pass all filters EXCEPT timeSlot
+  const preTimeFiltered = allFeatures.filter(f => {
+    const { sev, isoDate } = f.properties;
+    if (!activeFilters.severities.has(sev)) return false;
+    if (activeFilters.dateFrom && isoDate && isoDate < activeFilters.dateFrom) return false;
+    if (activeFilters.dateTo   && isoDate && isoDate > activeFilters.dateTo)   return false;
+    if (activeFilters.flags !== null) {
+      let flags;
+      try { flags = JSON.parse(f.properties.flags || '{}'); } catch(e) { flags = {}; }
+      if (![...activeFilters.flags].some(id => flags[id] === true)) return false;
+    }
+    return true;
+  });
+
+  const counts = TIME_SLOTS.map(slot =>
+    preTimeFiltered.filter(f => {
+      const h = f.properties.hour;
+      return h !== null && h !== undefined && h >= slot.startHour && h < slot.endHour;
+    }).length
+  );
+
+  const maxCount = Math.max(...counts, 1);
+
+  container.querySelectorAll('.chart-row').forEach((row, i) => {
+    const count = counts[i];
+    const pct = (count / maxCount) * 100;
+    row.querySelector('.chart-bar').style.width = pct + '%';
+    row.querySelector('.chart-count').textContent = count;
+    row.classList.toggle('active', activeFilters.timeSlot === i);
+  });
+}
+
+function buildChart() {
+  const container = document.getElementById('time-chart');
+
+  TIME_SLOTS.forEach((slot, i) => {
+    const row = document.createElement('div');
+    row.className = 'chart-row';
+    row.dataset.slot = i;
+    row.innerHTML = `
+      <span class="chart-label">${slot.label}</span>
+      <div class="chart-bar-wrap"><div class="chart-bar" style="width:0%"></div></div>
+      <span class="chart-count">—</span>`;
+
+    row.addEventListener('click', () => {
+      if (activeFilters.timeSlot === i) {
+        // clicking active slot deselects it
+        activeFilters.timeSlot = null;
+      } else {
+        activeFilters.timeSlot = i;
+      }
+      refreshMap();
+    });
+
+    container.appendChild(row);
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════
    INIT
 ═══════════════════════════════════════════════════════════════ */
 async function init() {
@@ -1159,6 +1270,11 @@ async function init() {
     center: CONFIG.initialCenter,
     zoom:   CONFIG.initialZoom,
     attributionControl: false,
+    maxBounds: [
+      [-116.790925, 34.277257],  // SW corner
+      [-113.148819, 37.578262],  // NE corner
+    ],
+    minZoom: 8,
   });
 
   map.addControl(new mapboxgl.NavigationControl(), 'bottom-right');
@@ -1195,6 +1311,7 @@ async function init() {
 
   buildSevFilters();
   buildFlagFilters();
+  buildChart();
   buildYearSelectors();
   updateStats();
 
