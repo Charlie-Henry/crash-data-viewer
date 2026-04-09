@@ -6,7 +6,7 @@ An interactive, single-file web map for visualizing traffic crash data. Built wi
 
 ## Live Demo
 
-Clark County, NV deployment: powered by NDOT crash data.
+[Clark County, NV deployment](https://clark-county-vz-viewer.onrender.com/)
 
 ---
 
