@@ -1,6 +1,6 @@
 # Crash Data Viewer
 
-An interactive, single-file web map for visualising traffic crash data. Built with [Mapbox GL JS](https://docs.mapbox.com/mapbox-gl-js/) and [PapaParse](https://www.papaparse.com/). No build step required — just a browser and a web server.
+An interactive, single-file web map for visualizing traffic crash data. Built with [Mapbox GL JS](https://docs.mapbox.com/mapbox-gl-js/) and [PapaParse](https://www.papaparse.com/). No build step required — just a browser and a web server.
 
 ---
 
@@ -214,8 +214,8 @@ Edit the CSS custom properties at the top of the `<style>` block:
 ```css
 :root {
   --accent:  #2563eb;  /* filter highlight, links */
-  --fatal:   #FE343B;  /* fatal crash marker colour */
-  --serious: #FEBC40;  /* serious injury marker colour */
+  --fatal:   #FE343B;  /* fatal crash marker color */
+  --serious: #FEBC40;  /* serious injury marker color */
 }
 ```
 
