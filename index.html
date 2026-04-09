@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Clark County — Crash Data Viewer</title>
+  <title id="page-title">Crash Data Viewer</title>
 
   <!-- FontAwesome -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
@@ -462,19 +462,19 @@
   <!-- SIDE PANEL -->
   <aside id="panel">
     <div class="panel-header">
-      <div class="eyebrow">Clark County, NV</div>
-      <h1>Crash Data Viewer</h1>
+      <div class="eyebrow" id="panel-eyebrow"></div>
+      <h1 id="panel-title"></h1>
       <div class="sub" id="date-range-label">Loading…</div>
     </div>
 
     <div class="stats-bar">
       <div class="stat fatal">
         <span class="val" id="stat-fatal">—</span>
-        <span class="lbl">Fatalities</span>
+        <span class="lbl" id="stat-fatal-lbl"></span>
       </div>
       <div class="stat serious">
         <span class="val" id="stat-serious">—</span>
-        <span class="lbl">Serious Injury</span>
+        <span class="lbl" id="stat-serious-lbl"></span>
       </div>
     </div>
 
@@ -531,10 +531,7 @@
 
     </div>
 
-    <div class="panel-attribution">
-      Data from <a href="https://www.dot.nv.gov/safety/traffic-crash-data" target="_blank" rel="noopener">NDOT</a>
-      &mdash; Visualization created by <a href="https://charliehenry.ch/" target="_blank" rel="noopener">Charlie Henry</a>
-    </div>
+    <div class="panel-attribution" id="panel-attribution"></div>
   </aside>
 
   <!-- MAP -->
@@ -546,7 +543,9 @@
 
 <script>
 /* ═══════════════════════════════════════════════════════════════
-   CONFIGURATION — edit these values for your deployment
+   CONFIGURATION
+   All deployment-specific values live here and in config.js.
+   You should not need to edit anything below this block.
 ═══════════════════════════════════════════════════════════════ */
 const CONFIG = {
   // 1) Your Mapbox public token
@@ -581,13 +580,25 @@ const CONFIG = {
     'Serious Injury': 'serious',
   },
 
-  // 5) Initial map center (Las Vegas / Clark County)
+  // 5) Map view
   initialCenter: [-115.1398, 36.1699],
   initialZoom:   10,
+  maxBounds: null, // set in map constructor — override here to null to disable
+
+  // 6) UI strings — update these for your region
+  ui: {
+    eyebrow:       'Clark County, NV',
+    title:         'Crash Data Viewer',
+    attribution:   'Data from <a href="https://www.dot.nv.gov/safety/traffic-crash-data" target="_blank" rel="noopener">NDOT</a> &mdash; Visualization created by <a href="https://charliehenry.ch/" target="_blank" rel="noopener">Charlie Henry</a>',
+    fatalLabel:    'Fatalities',
+    seriousLabel:  'Serious Injury',
+  },
 };
 
 /* ═══════════════════════════════════════════════════════════════
    SEVERITY DISPLAY CONFIG
+   Add/remove entries to match your data's severity values.
+   id must match a value produced by CONFIG.severityMap.
 ═══════════════════════════════════════════════════════════════ */
 const SEVERITIES = [
   { id: 'fatal',   label: 'Fatal',          color: '#FE343B', radius: 6 },
@@ -598,6 +609,9 @@ const SEV_COLOR_MAP = Object.fromEntries(SEVERITIES.map(s => [s.id, s.color]));
 
 /* ═══════════════════════════════════════════════════════════════
    INVOLVEMENT FLAGS CONFIG
+   Each entry maps a sidebar filter button to a boolean CSV column.
+   col must match a key in CONFIG.columns.
+   faClass must be a valid FontAwesome 6 free-tier class string.
 ═══════════════════════════════════════════════════════════════ */
 const FLAGS = [
   { id: 'alcohol',    label: 'Alcohol Involved',    faClass: 'fa-solid fa-wine-glass',  col: 'alcohol'    },
@@ -1403,7 +1417,18 @@ function buildDowChart() {
 /* ═══════════════════════════════════════════════════════════════
    INIT
 ═══════════════════════════════════════════════════════════════ */
+function applyUiStrings() {
+  const ui = CONFIG.ui || {};
+  document.getElementById('panel-eyebrow').textContent    = ui.eyebrow      || '';
+  document.getElementById('panel-title').textContent      = ui.title        || 'Crash Data Viewer';
+  document.getElementById('stat-fatal-lbl').textContent   = ui.fatalLabel   || 'Fatalities';
+  document.getElementById('stat-serious-lbl').textContent = ui.seriousLabel || 'Serious Injury';
+  document.getElementById('panel-attribution').innerHTML  = ui.attribution  || '';
+  document.title = (ui.eyebrow ? ui.eyebrow + ' — ' : '') + (ui.title || 'Crash Data Viewer');
+}
+
 async function init() {
+  applyUiStrings();
   const configured = validateConfig();
 
   // ─ init Mapbox
@@ -1415,9 +1440,9 @@ async function init() {
     center: CONFIG.initialCenter,
     zoom:   CONFIG.initialZoom,
     attributionControl: false,
-    maxBounds: [
-      [-116.790925, 34.277257],  // SW corner
-      [-113.148819, 37.578262],  // NE corner
+    maxBounds: CONFIG.maxBounds || [
+      [-116.790925, 34.277257],  // SW — override via CONFIG.maxBounds
+      [-113.148819, 37.578262],  // NE
     ],
     minZoom: 8,
   });
