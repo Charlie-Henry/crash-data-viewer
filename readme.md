@@ -6,7 +6,7 @@ An interactive, single-file web map for visualizing traffic crash data. Built wi
 
 ## Live Demo
 
-[Clark County, NV deployment](https://clark-county-vz-viewer.onrender.com/)
+[Clark County, NV deployment](https://charlie-henry.github.io/crash-data-viewer/)
 
 ---
 
