@@ -651,7 +651,7 @@ let activeFilters = {
   flags:      null,
   dateFrom:   null,
   dateTo:     null,
-  timeSlot:   null, // null = all times; 0-5 = index into TIME_SLOTS
+  timeSlots:  null, // null = all times; Set of slot indices
   dowDays:    null, // null = all days; Set of dow integers (0=Sun … 6=Sat)
 };
 let map, popup;
@@ -790,10 +790,14 @@ function filteredFeatures() {
       if (!matchesAny) return false;
     }
     // Time slot filter
-    if (activeFilters.timeSlot !== null) {
-      const slot = TIME_SLOTS[activeFilters.timeSlot];
+    if (activeFilters.timeSlots !== null) {
       const h = f.properties.hour;
-      if (h === null || h === undefined || h < slot.startHour || h >= slot.endHour) return false;
+      if (h === null || h === undefined) return false;
+      const inAny = [...activeFilters.timeSlots].some(i => {
+        const slot = TIME_SLOTS[i];
+        return h >= slot.startHour && h < slot.endHour;
+      });
+      if (!inAny) return false;
     }
     // Day of week filter
     if (activeFilters.dowDays !== null) {
@@ -805,12 +809,28 @@ function filteredFeatures() {
 }
 
 function countBySev(features) {
+  // fatal: sum of NumFatalities per crash
+  // serious: count of serious-severity crashes (no per-crash injury count available)
   const counts = {};
   for (const f of features) {
     const s = f.properties.sev;
-    counts[s] = (counts[s] || 0) + 1;
+    if (s === 'fatal') {
+      counts.fatal = (counts.fatal || 0) + (f.properties.numFatalities || 1);
+    } else {
+      counts[s] = (counts[s] || 0) + 1;
+    }
   }
   return counts;
+}
+
+// Sum fatalities + serious injury crashes in a feature array (consistent with header stats)
+function sumVictims(features) {
+  return features.reduce((total, f) => {
+    const s = f.properties.sev;
+    if (s === 'fatal') return total + (f.properties.numFatalities || 1);
+    if (s === 'serious') return total + 1;
+    return total;
+  }, 0);
 }
 
 function updateStats() {
@@ -822,10 +842,35 @@ function updateStats() {
   const counts = countBySev(visible);
   document.getElementById('stat-serious').textContent = formatNum(counts.serious || 0);
 
-  // update sev button counts (total across all data)
+  // update sev button counts — same filtered set as header, minus severity filter
+  const preSevFiltered = allFeatures.filter(f => {
+    const { isoDate } = f.properties;
+    if (activeFilters.dateFrom && isoDate && isoDate < activeFilters.dateFrom) return false;
+    if (activeFilters.dateTo   && isoDate && isoDate > activeFilters.dateTo)   return false;
+    if (activeFilters.flags !== null) {
+      let flags;
+      try { flags = JSON.parse(f.properties.flags || '{}'); } catch(e) { flags = {}; }
+      if (![...activeFilters.flags].some(id => flags[id] === true)) return false;
+    }
+    if (activeFilters.timeSlots !== null) {
+      const h = f.properties.hour;
+      if (h === null || h === undefined) return false;
+      const inAny = [...activeFilters.timeSlots].some(i => {
+        const slot = TIME_SLOTS[i];
+        return h >= slot.startHour && h < slot.endHour;
+      });
+      if (!inAny) return false;
+    }
+    if (activeFilters.dowDays !== null) {
+      const d = f.properties.dow;
+      if (d === null || d === undefined || !activeFilters.dowDays.has(d)) return false;
+    }
+    return true;
+  });
+  const preSevCounts = countBySev(preSevFiltered);
   for (const sev of SEVERITIES) {
     const el = document.querySelector(`[data-sev="${sev.id}"] .sev-count`);
-    if (el) el.textContent = formatNum(countBySev(allFeatures)[sev.id] || 0);
+    if (el) el.textContent = formatNum(preSevCounts[sev.id] || 0);
   }
   // update flag button counts against severity+date filtered set (before flag filter)
   const preFlagFiltered = allFeatures.filter(f => {
@@ -838,10 +883,10 @@ function updateStats() {
   for (const flag of FLAGS) {
     const el = document.querySelector(`[data-flag="${flag.id}"] .mode-count`);
     if (!el) continue;
-    const count = preFlagFiltered.filter(f => {
+    const matching = preFlagFiltered.filter(f => {
       try { return JSON.parse(f.properties.flags || '{}')[flag.id] === true; } catch(e) { return false; }
-    }).length;
-    el.textContent = formatNum(count);
+    });
+    el.textContent = formatNum(sumVictims(matching));
   }
   updateChart();
   updateDowChart();
@@ -1098,8 +1143,8 @@ function resetFilters() {
   activeFilters.flags = null;
   document.querySelectorAll('#mode-filters [data-flag]').forEach(b => b.classList.remove('active'));
 
-  // reset time slot
-  activeFilters.timeSlot = null;
+  // reset time slots
+  activeFilters.timeSlots = null;
 
   // reset day of week
   activeFilters.dowDays = null;
@@ -1279,7 +1324,7 @@ function updateChart() {
   const container = document.getElementById('time-chart');
   if (!container) return;
 
-  // Count crashes per slot from features that pass all filters EXCEPT timeSlot
+  // Count victims per slot from features that pass all filters EXCEPT timeSlots
   const preTimeFiltered = allFeatures.filter(f => {
     const { sev, isoDate } = f.properties;
     if (!activeFilters.severities.has(sev)) return false;
@@ -1294,10 +1339,10 @@ function updateChart() {
   });
 
   const counts = TIME_SLOTS.map(slot =>
-    preTimeFiltered.filter(f => {
+    sumVictims(preTimeFiltered.filter(f => {
       const h = f.properties.hour;
       return h !== null && h !== undefined && h >= slot.startHour && h < slot.endHour;
-    }).length
+    }))
   );
 
   const maxCount = Math.max(...counts, 1);
@@ -1307,7 +1352,7 @@ function updateChart() {
     const pct = (count / maxCount) * 100;
     row.querySelector('.chart-bar').style.width = pct + '%';
     row.querySelector('.chart-count').textContent = count;
-    row.classList.toggle('active', activeFilters.timeSlot === i);
+    row.classList.toggle('active', activeFilters.timeSlots !== null && activeFilters.timeSlots.has(i));
   });
 }
 
@@ -1324,11 +1369,13 @@ function buildChart() {
       <span class="chart-count">—</span>`;
 
     row.addEventListener('click', () => {
-      if (activeFilters.timeSlot === i) {
-        // clicking active slot deselects it
-        activeFilters.timeSlot = null;
+      if (activeFilters.timeSlots === null) {
+        activeFilters.timeSlots = new Set([i]);
+      } else if (activeFilters.timeSlots.has(i)) {
+        activeFilters.timeSlots.delete(i);
+        if (activeFilters.timeSlots.size === 0) activeFilters.timeSlots = null;
       } else {
-        activeFilters.timeSlot = i;
+        activeFilters.timeSlots.add(i);
       }
       refreshMap();
     });
@@ -1351,10 +1398,14 @@ function getPreDowFiltered() {
       try { flags = JSON.parse(f.properties.flags || '{}'); } catch(e) { flags = {}; }
       if (![...activeFilters.flags].some(id => flags[id] === true)) return false;
     }
-    if (activeFilters.timeSlot !== null) {
-      const slot = TIME_SLOTS[activeFilters.timeSlot];
+    if (activeFilters.timeSlots !== null) {
       const h = f.properties.hour;
-      if (h === null || h === undefined || h < slot.startHour || h >= slot.endHour) return false;
+      if (h === null || h === undefined) return false;
+      const inAny = [...activeFilters.timeSlots].some(i => {
+        const slot = TIME_SLOTS[i];
+        return h >= slot.startHour && h < slot.endHour;
+      });
+      if (!inAny) return false;
     }
     return true;
   });
@@ -1365,7 +1416,7 @@ function updateDowChart() {
   if (!container) return;
 
   const base = getPreDowFiltered();
-  const counts = DOW_DAYS.map(d => base.filter(f => f.properties.dow === d.dow).length);
+  const counts = DOW_DAYS.map(d => sumVictims(base.filter(f => f.properties.dow === d.dow)));
   const maxCount = Math.max(...counts, 1);
 
   container.querySelectorAll('.dow-day').forEach((el, i) => {
